@@ -30,7 +30,7 @@ import globals from 'globals';
 export default tseslint.config(
   {
     // Generated, vendored, or not ours. `target/` is the retired Java build output still on disk.
-    ignores: ['dist/**', 'node_modules/**', 'target/**', 'coverage/**', 'data/**', 'public/**'],
+    ignores: ['dist/**', 'node_modules/**', 'target/**', 'coverage/**', 'data/**', 'public/**', 'artifacts/**', 'logs/**'],
   },
 
   js.configs.recommended,
@@ -186,6 +186,11 @@ export default tseslint.config(
   {
     files: ['tools/workbenchServer*.ts'],
     extends: [...tseslint.configs.recommended],
+  },
+  // These Node scripts serialize page.evaluate callbacks into the browser context.
+  {
+    files: ['scripts/workbench-*.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   // A declaration file declares signatures and binds nothing: its parameter names are documentation,
   // so `no-unused-vars` reports every one of them. `tools/refresh/modText.d.mts` exists because a test

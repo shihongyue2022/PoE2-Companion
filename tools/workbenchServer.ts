@@ -1,12 +1,23 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
-import { summarizeListingPrices, type MarketEstimateResult } from '../src/workbench/marketEstimate';
+import {
+  estimateConfidence, estimateQueryContext, representativeListings, summarizeListingPrices,
+  type MarketEstimateResult,
+} from '../src/workbench/marketEstimate';
+import { TRADE_CATEGORY } from '../src/lib/gearTrade';
 
 const OFFICIAL = 'https://www.pathofexile.com';
 const MAX_BODY = 65_536;
 const CACHE_TTL = 120_000;
 const MIN_ESTIMATE_INTERVAL = 15_000;
+// Explicit equipment-only allowlist, verified against the official trade2 filters metadata.
+// Keep this broader than planner-supported bases: clipboard comparisons also cover jewels and flasks.
+const EQUIPMENT_CATEGORIES = new Set([...Object.values(TRADE_CATEGORY),
+  'weapon.claw', 'weapon.dagger', 'weapon.onesword', 'weapon.oneaxe', 'weapon.flail',
+  'weapon.twosword', 'weapon.twoaxe', 'weapon.talisman', 'weapon.rod',
+  'jewel', 'flask', 'flask.life', 'flask.mana', 'flask.charm', 'sanctum.relic',
+]);
 type JsonObject = Record<string, unknown>;
 const object = (value: unknown): value is JsonObject => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -61,9 +72,14 @@ export function validateEstimate(value: unknown): { league: string; search: Json
   if (!object(query.status) || !['any', 'online', 'securable'].includes(String(query.status.option))
     || !object(query.filters) || !object(query.filters.type_filters) || !object(query.filters.type_filters.filters)
     || !object(query.filters.type_filters.filters.category)
-    || !['accessory.ring', 'accessory.amulet'].includes(String(query.filters.type_filters.filters.category.option))
+    || !EQUIPMENT_CATEGORIES.has(String(query.filters.type_filters.filters.category.option))
     || !Array.isArray(query.stats) || query.stats.length > 64) {
-    throw new WorkbenchRequestError(400, '当前仅支持戒指和项链的官方交易条件。');
+    throw new WorkbenchRequestError(400, '请选择受支持的装备类别和有效的官方交易条件。');
+  }
+  for (const key of ['type', 'name']) if (query[key] !== undefined
+    && (typeof query[key] !== 'string' || query[key].length > 256
+      || Array.from(query[key]).some((character) => character.charCodeAt(0) < 32))) {
+    throw new WorkbenchRequestError(400, '装备名称或底座无效。');
   }
   let count = 0;
   for (const group of query.stats) {
@@ -160,12 +176,16 @@ export function createEstimateService(options: EstimateServiceOptions = {}) {
         }
       }
       const summary = summarizeListingPrices(listings);
+      const context = estimateQueryContext(search);
+      const confidence = estimateConfidence(context, summary.groups);
       if (summary.groups.some((group) => group.count < 5)) warnings.push('部分币种少于 5 个卖家，样本很少，区间仅供核对。');
       if (found.total > ids.length) warnings.push('样本来自价格升序最前面的挂单，偏向市场低价，不能当作全市场中位数。');
       if (summary.groups.length > 1) warnings.push('不同币种分别统计，未使用汇率换算或混算。');
+      warnings.push(...confidence.reasons);
       return {
         ok: true, total: Math.max(0, Math.floor(found.total)), fetched: listings.length,
         ...summary, sampledAt: new Date(now()).toISOString(), cached: false,
+        context, confidence, listings: representativeListings(listings),
         url: `${OFFICIAL}/trade2/search/poe2/${encodeURIComponent(league)}/${encodeURIComponent(found.id)}`, warnings,
       };
     } catch (error) {
@@ -254,6 +274,9 @@ export function createWorkbenchBridge(options: EstimateServiceOptions = {}) {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1');
     const route = url.pathname;
     try {
+      if (route === '/api/workbench/health' && request.method === 'GET') {
+        writeJson(response, 200, { ok: true, app: 'poe2-craft-workbench' }); return;
+      }
       if (route === '/api/workbench/clipboard/events' && request.method === 'GET') {
         if (clients.size >= 5) throw new WorkbenchRequestError(429, '已达到本地连接上限。');
         response.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform',

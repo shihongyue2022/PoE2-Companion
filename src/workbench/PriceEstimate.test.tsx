@@ -25,6 +25,32 @@ describe('local listing estimate UI', () => {
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({ status: 'ready', message: '低价样本参考 15–25 神圣石' }));
   });
 
+  it('renders all currencies, insufficient-condition warnings and real samples with official links', async () => {
+    const expanded = { ...sample,
+      groups: [...sample.groups, { currency: 'alch', count: 1, min: 1, max: 1, median: 1, p25: 1, p75: 1 }],
+      context: { category: 'armour.helmet', statCount: 0, propertyCount: 0, sufficient: false, summary: ['头盔', '非传奇', '任意状态'] },
+      confidence: { level: 'low', reasons: ['条件不足：未限定足够的关键属性。'] },
+      listings: [{ id: 'sample1', name: 'Gloom Corona', base: 'Expert Feathered Tiara', price: { amount: 10, currency: 'divine' },
+        properties: ['Energy Shield: 300'], explicitMods: ['+90 to maximum Life'], indexedAt: '2026-10-21T11:30:00Z' }],
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(expanded)));
+    const callback = vi.fn();
+    render(<PriceEstimate query={query} url={url} league="Test" onEstimate={callback} />);
+    fireEvent.click(screen.getByRole('button', { name: '获取挂牌估价' }));
+    expect(await screen.findByText('15–25 神圣石')).toBeInTheDocument();
+    expect(screen.getByText('1–1 点金石')).toBeInTheDocument();
+    expect(screen.getByText(/置信度低/)).toBeInTheDocument();
+    expect(screen.getByText(/条件不足/)).toBeInTheDocument();
+    expect(screen.getByText(/主要条件：头盔/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('查看实际挂单样本（1）'));
+    expect(screen.getByText('Gloom Corona · Expert Feathered Tiara')).toBeInTheDocument();
+    expect(screen.getByText('能量护盾：300')).toBeInTheDocument();
+    expect(screen.getByText('90最大生命')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /在官方结果中核对样本/ })).toHaveAttribute('href', url);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ message: '挂牌参考 · 2 种币种 · 低置信',
+      detail: expect.stringContaining('样本：Gloom Corona · Expert Feathered Tiara / 10 神圣石') }));
+  });
+
   it('automatically queries once per stable clipboard query and reports anonymous denial honestly', async () => {
     const network = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
       ok: false, error: { kind: 'login', message: '官方交易拒绝了匿名请求，请在官网查看挂单。' }, url,

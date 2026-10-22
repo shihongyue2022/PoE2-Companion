@@ -1,4 +1,4 @@
-import { chromium } from '@playwright/test';
+import { chromium, expect } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 
@@ -87,7 +87,8 @@ try {
 
   const packet = await (await page.request.post(`${baseUrl}/api/workbench/clipboard`, { data: { raw: afterAnnul, mode: 'checkpoint' } })).json();
   assert(packet.ok);
-  await page.waitForFunction(async (id) => (await (await fetch(`/api/workbench/companion-result?id=${id}`)).json()).status === 'ready', packet.id);
+  await expect.poll(async () => (await (await page.request.get(`${baseUrl}/api/workbench/companion-result?id=${packet.id}`)).json()).status,
+    { timeout: 20000 }).toBe('ready');
   check('desktop checkpoint packet travels through SSE and receives the verified result');
 
   const beforePrice = await page.evaluate(() => localStorage.getItem('poe2-workbench-v1'));
@@ -99,7 +100,8 @@ try {
   }) }));
   const pricePacket = await (await page.request.post(`${baseUrl}/api/workbench/clipboard`, { data: { raw, mode: 'trade' } })).json();
   await page.getByRole('region', { name: '装备估价' }).getByText(/55–70/).waitFor();
-  await page.waitForFunction(async (id) => (await (await fetch(`/api/workbench/companion-result?id=${id}`)).json()).status === 'ready', pricePacket.id);
+  await expect.poll(async () => (await (await page.request.get(`${baseUrl}/api/workbench/companion-result?id=${pricePacket.id}`)).json()).status,
+    { timeout: 20000 }).toBe('ready');
   const afterPrice = await page.evaluate(() => localStorage.getItem('poe2-workbench-v1'));
   assert.equal(afterPrice, beforePrice);
   await page.getByRole('region', { name: '装备估价' }).screenshot({ path: 'artifacts/workbench/price-estimate.png' });

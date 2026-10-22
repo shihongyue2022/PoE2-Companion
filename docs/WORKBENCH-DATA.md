@@ -51,7 +51,15 @@
 
 同类顶配预设由 `tradeTopGear.ts` 读取完整词缀阶层表，使用所选 T2 下限、T1 下限、T1 区间 80% 位置或 T1 上限；不会因原装备物等较低而排除市场上的高物等词缀。已确认实际值更高时默认保留原值，品质不重复相乘。总抗性与总能力值对组成词缀的相应参考值加权合计。该预设只改变搜索门槛，仍用价格升序展示满足门槛的官网挂单，不构造市场排名。
 
-## 官方通货图标
+## 全装备交易词典与属性比较
+
+`src/workbench/data/equipment-index.json` 独立于制作词池，包含 2426 个装备／传奇名称记录和 2476 个可交易属性记录。来源为固定提交 `572c1925e4737d2c5f79143d03280df9660c1d8f` 的 [Exiled Exchange 2](https://github.com/Kvan7/Exiled-Exchange-2/tree/572c1925e4737d2c5f79143d03280df9660c1d8f/renderer/public/data) 英文及 `cmn-Hant` 的 `items.ndjson`、`stats.ndjson`，并按 2026-10-22 取得的 [官方 filters](https://www.pathofexile.com/api/trade2/data/filters) 与 [官方 stats](https://www.pathofexile.com/api/trade2/data/stats) 过滤可用类别和 ID。简繁字符转换使用既有 OpenCC 许可来源。缺少翻译时保留英文名称；未匹配效果不猜成其他属性。
+
+生成命令：`node tools/refresh/equipment_index.mjs`；`--refresh` 重新获取来源。原始响应缓存位于忽略提交的 `artifacts/`，清单保留固定提交与元数据日期。新增数据仍适用已附带的 MIT／Apache 来源许可，官方游戏图像权属不变。
+
+高级复制范围先去除区间参考，再读取实际显示值。物品伤害区间分隔符不作为负号；双端伤害按均值查询，其他未核验多值公式仅查是否存在。装备比较只加总直接属性，局部防御／伤害修正已包括在物品显示属性里，不重复计算。无法确认的条件效果单列，不将其收益当作零。
+
+## 官方通货图标来源
 
 通货图标清单 `src/workbench/data/currency-icons.json` 于 2026-10-22 从 [GGG 官方 trade2 static 接口](https://www.pathofexile.com/api/trade2/data/static)按英文 `text` 精确匹配获取，并与上述固定版本 Exiled Exchange 2 的 `items.ndjson` 交叉核对。包含模拟器的 15 种通货、高阶／完美混沌石及神圣石，共 18 项、8 张不同原图。全部 URL 为 `web.poecdn.com` 的 PoE2 图片，逐张验证 HTTP 200、PNG 签名、尺寸、内容类型及 SHA-256，并保存核验元数据。
 

@@ -1,5 +1,11 @@
 @echo off
 setlocal
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\start-workbench.ps1" -NoBrowser -NoHotkeys
+if errorlevel 1 (
+  echo The local workbench could not start. Run start-workbench.cmd to check dependencies.
+  pause
+  exit /b 1
+)
 set "POE2_WORKBENCH_HOTKEYS=%~dp0scripts\workbench-hotkeys.ps1"
 if not exist "%POE2_WORKBENCH_HOTKEYS%" (
   echo Hotkey companion script was not found.

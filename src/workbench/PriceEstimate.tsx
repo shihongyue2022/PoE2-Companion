@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FlexibleTradeDocument } from './tradeSearch';
+import { localizeEquipmentName, localizeEquipmentProperty, localizeEquipmentStat } from './genericEquipment';
 import {
   estimateCurrencyName, estimateNumber, estimateSummary, fetchMarketEstimate,
   type MarketEstimateResult,
@@ -90,14 +91,33 @@ function PriceEstimateRequest({ query, url, league, auto = false, onEstimate }: 
     {result?.ok && <div aria-live="polite">
       <p className="wb-muted">匹配 {result.total.toLocaleString('zh-CN')} 件 · 已取 {result.fetched} 件 · 有效样本 {result.priced} 件
         {result.duplicateSellers > 0 ? ` · 去重 ${result.duplicateSellers} 件` : ''}
-        {' · '}{result.cached ? '两分钟内的缓存' : '实时请求'} · {new Date(result.sampledAt).toLocaleTimeString('zh-CN')}</p>
+        {' · '}{result.cached ? '两分钟内的缓存' : '实时请求'} · {new Date(result.sampledAt).toLocaleString('zh-CN', { hour12: false })}</p>
+      {result.context && <p className="wb-muted">主要条件：{result.context.summary.join(' · ')}</p>}
+      {result.confidence && <div className={result.confidence.level === 'low' ? 'wb-warning' : 'wb-muted'}>
+        <strong>{result.confidence.level === 'low' ? '置信度低' : '置信度有限'} · 仅为低价挂牌参考</strong>
+        {result.confidence.reasons.map((reason) => <p key={reason}>{reason}</p>)}
+      </div>}
       {!result.groups.length && <p>{result.total === 0 ? '没有找到挂单。可切换“宽松比较”或减少勾选属性。' : '样本中没有有效标价，请到官网核对。'}</p>}
       {result.groups.map((group) => <div className="wb-card" key={group.currency}>
         <strong>{estimateNumber(group.p25)}–{estimateNumber(group.p75)} {estimateCurrencyName(group.currency)}</strong>
         <p>低价样本中间 50% 区间 · {group.count} 个卖家</p>
         <p className="wb-muted">样本中位数 {estimateNumber(group.median)} · 最低 {estimateNumber(group.min)} · 最高 {estimateNumber(group.max)}</p>
       </div>)}
-      {result.warnings.map((warning) => <p key={warning} className="wb-muted">{warning}</p>)}
+      {result.warnings.filter((warning) => !result.confidence?.reasons.includes(warning)).map((warning) => <p key={warning} className="wb-muted">{warning}</p>)}
+      {!!result.listings?.length && <details className="wb-card">
+        <summary>查看实际挂单样本（{result.listings.length}）</summary>
+        <p className="wb-muted">以下为官方结果中的部分物品，按币种展示低价与中间样本。请比较底座、主要属性和数值，再判断相似程度。</p>
+        {result.listings.map((listing) => <article className="wb-card" key={listing.id}>
+          <div className="wb-row wb-wrap">
+            <strong>{[listing.name, listing.base].filter(Boolean).map(localizeEquipmentName).join(' · ')}</strong>
+            <span>{estimateNumber(listing.price.amount)} {estimateCurrencyName(listing.price.currency)}</span>
+          </div>
+          {listing.properties?.map((property, index) => <p className="wb-muted" key={`property-${index}`}>{localizeEquipmentProperty(property)}</p>)}
+          {listing.explicitMods?.map((mod, index) => <p key={`mod-${index}`}>{localizeEquipmentStat(mod)}</p>)}
+          {listing.indexedAt && <p className="wb-muted">挂牌索引时间：{new Date(listing.indexedAt).toLocaleString('zh-CN', { hour12: false })}</p>}
+          <a className="wb-link" href={result.url} target="_blank" rel="noreferrer">在官方结果中核对样本 →</a>
+        </article>)}
+      </details>}
     </div>}
     {(error || result) && <p><a className="wb-link" href={result?.url ?? url} target="_blank" rel="noreferrer">在官方交易网站核对挂单 ↗</a></p>}
   </section>;

@@ -80,6 +80,42 @@ describe('official market estimate service', () => {
     expect(() => validateEstimate({ ...body, league: '' })).toThrow();
     expect(validateEstimate({ ...body, url: 'http://attacker.test', search: { ...search, sort: { price: 'desc' } } })).toEqual(body);
   });
+
+  it('allows official equipment categories while refusing currencies, maps and invented upstream paths', () => {
+    const requestFor = (category: string) => ({ ...body, search: { ...search, query: { ...search.query,
+      filters: { ...search.query.filters, type_filters: { filters: { category: { option: category }, rarity: { option: 'unique' } } } },
+    } } });
+    for (const category of ['accessory.belt', 'armour.helmet', 'armour.chest', 'armour.gloves', 'armour.boots',
+      'armour.shield', 'armour.buckler', 'armour.focus', 'armour.quiver', 'weapon.wand', 'weapon.staff', 'weapon.bow',
+      'weapon.crossbow', 'weapon.spear', 'weapon.onemace', 'weapon.twomace', 'weapon.warstaff', 'weapon.sceptre',
+      'weapon.talisman', 'jewel', 'flask.life', 'flask.mana', 'flask.charm', 'sanctum.relic']) {
+      expect(validateEstimate(requestFor(category))).toEqual(requestFor(category));
+    }
+    for (const category of ['currency', 'map.waystone', 'weapon../http://attacker.test', 'invented']) {
+      expect(() => validateEstimate(requestFor(category))).toThrow('装备类别');
+    }
+    expect(() => validateEstimate({ ...body, search: { ...search, query: { ...search.query, name: 'name\0injected' } } })).toThrow();
+  });
+
+  it('returns every currency and sanitized real item examples, labeling broad category searches as low confidence', async () => {
+    const network = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(json({ id: 'mixed', total: 500, result: ['a', 'b', 'c', 'd'] }))
+      .mockResolvedValueOnce(json({ result: [
+        { ...item(1, 'alch', 'private-seller-a'), id: 'a', item: { name: '', baseType: 'Ruby Ring', explicitMods: ['+10 to maximum Life'] } },
+        { ...item(1, 'alch', 'private-seller-b'), id: 'b', item: { name: '', baseType: 'Gold Ring' } },
+        { ...item(40, 'exalted', 'private-seller-c'), id: 'c', item: { name: 'Doom Circle', baseType: 'Breach Ring', explicitMods: ['+80 to maximum Life'] } },
+        { ...item(2, 'divine', 'private-seller-d'), id: 'd', item: { name: 'Gloom Loop', baseType: 'Ruby Ring' } },
+      ] }));
+    const result = await createEstimateService({ fetch: network })(body);
+    expect(result).toMatchObject({ ok: true, priced: 4, context: { sufficient: false }, confidence: { level: 'low' } });
+    if (!result.ok) throw new Error('Expected a public summary');
+    expect(result.groups.map((group) => group.currency)).toEqual(['alch', 'divine', 'exalted']);
+    expect(result.listings?.some((row) => row.name === 'Doom Circle' && row.price.amount === 40)).toBe(true);
+    expect(result.warnings.join(' ')).toContain('条件不足');
+    expect(JSON.stringify(result)).not.toContain('private-seller');
+    expect(network.mock.calls.every(([url, options]) => String(url).startsWith('https://www.pathofexile.com/api/trade2/')
+      && options?.redirect === 'error')).toBe(true);
+  });
 });
 
 describe('local desktop bridge', () => {

@@ -22,6 +22,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -80,19 +81,19 @@ namespace PoE2WorkbenchHotkeys {
         internal StatusPanel() {
             Text = "PoE2 做装工坊 · 快捷查价";
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(450, 280);
+            ClientSize = new Size(600, 440);
             FormBorderStyle = FormBorderStyle.FixedToolWindow;
             ShowInTaskbar = false; TopMost = true; StartPosition = FormStartPosition.Manual;
             BackColor = Color.FromArgb(24, 29, 23); ForeColor = Color.FromArgb(230, 234, 218);
             Font = new Font("Microsoft YaHei UI", 9F);
-            Heading.SetBounds(16, 14, 418, 28); Heading.Font = new Font(Font, FontStyle.Bold);
-            Description.SetBounds(16, 48, 418, 133);
+            Heading.SetBounds(16, 14, 568, 36); Heading.Font = new Font(Font, FontStyle.Bold);
+            Description.SetBounds(16, 56, 568, 292);
             Description.Multiline = true; Description.ReadOnly = true; Description.BorderStyle = BorderStyle.None;
             Description.BackColor = BackColor; Description.ForeColor = ForeColor; Description.ScrollBars = ScrollBars.Vertical;
-            Item.SetBounds(16, 190, 418, 28); Item.AutoEllipsis = true;
-            OpenWorkbench.SetBounds(16, 230, 145, 32); OpenWorkbench.Text = "在工坊查看";
-            OpenResult.SetBounds(171, 230, 145, 32); OpenResult.Text = "打开官方交易"; OpenResult.Enabled = false;
-            Button hide = new Button(); hide.SetBounds(326, 230, 108, 32); hide.Text = "收起 (Esc)";
+            Item.SetBounds(16, 360, 568, 28); Item.AutoEllipsis = true;
+            OpenWorkbench.SetBounds(16, 398, 180, 32); OpenWorkbench.Text = "在工坊查看";
+            OpenResult.SetBounds(206, 398, 180, 32); OpenResult.Text = "打开官方交易"; OpenResult.Enabled = false;
+            Button hide = new Button(); hide.SetBounds(396, 398, 188, 32); hide.Text = "收起 (Esc)";
             hide.Click += delegate { Hide(); };
             foreach (Button button in new Button[] { OpenWorkbench, OpenResult, hide }) {
                 button.FlatStyle = FlatStyle.Flat; button.ForeColor = ForeColor; button.BackColor = Color.FromArgb(47, 57, 42);
@@ -104,6 +105,7 @@ namespace PoE2WorkbenchHotkeys {
         }
         internal void Display(string title, string description, string item) {
             Heading.Text = title; Description.Text = description; Item.Text = item;
+            Description.SelectionStart = 0; Description.SelectionLength = 0; Description.ScrollToCaret();
             if (!Visible) {
                 Rectangle area = Screen.FromPoint(Cursor.Position).WorkingArea;
                 Location = new Point(area.Right - Width - 20, area.Bottom - Height - 20);
@@ -123,6 +125,7 @@ namespace PoE2WorkbenchHotkeys {
 
     internal sealed class CompanionContext : ApplicationContext {
         private readonly string origin;
+        private readonly string launcherPath;
         private readonly HotkeyWindow window;
         private readonly StatusPanel panel;
         private readonly NotifyIcon tray;
@@ -135,8 +138,9 @@ namespace PoE2WorkbenchHotkeys {
         private DateTime captureDeadline, postDeadline, pollDeadline, nextPoll, resultDeadline;
         private bool escapeWasDown, disposed;
 
-        internal CompanionContext(string baseUrl) {
+        internal CompanionContext(string baseUrl, string startupScript) {
             origin = baseUrl.TrimEnd('/');
+            launcherPath = startupScript;
             window = new HotkeyWindow();
             uint modifiers = 0x0001 | 0x0002 | 0x4000; // Alt + Ctrl + no repeat
             bool priceKey = Native.RegisterHotKey(window.Handle, 1, modifiers, (uint)Keys.D);
@@ -146,16 +150,16 @@ namespace PoE2WorkbenchHotkeys {
                 throw new InvalidOperationException("Ctrl+Alt+D 或 Ctrl+Alt+G 已被其他程序占用。请关闭冲突程序后重新启动。");
             }
             panel = new StatusPanel();
-            panel.OpenWorkbench.Click += delegate { OpenUrl(origin + "/?companion=1"); };
+            panel.OpenWorkbench.Click += delegate { OpenWorkbench(); };
             panel.OpenResult.Click += delegate { if (!String.IsNullOrEmpty(resultUrl)) OpenUrl(resultUrl); };
             ContextMenuStrip menu = new ContextMenuStrip();
-            menu.Items.Add("打开做装工坊", null, delegate { OpenUrl(origin + "/?companion=1"); });
+            menu.Items.Add("打开做装工坊", null, delegate { OpenWorkbench(); });
             menu.Items.Add("显示快捷键说明", null, delegate {
                 panel.Display("游戏内快捷键", "鼠标指向装备：\r\nCtrl+Alt+D：高级复制装备并查价\r\nCtrl+Alt+G：高级复制并核对当前制作锚点\r\n\r\n请先启动并打开本地工坊。Esc 收起面板。\r\n网页负责计算；本助手只发送一次 Ctrl+Alt+C 高级复制。", itemSummary);
             });
             menu.Items.Add("退出快捷键助手", null, delegate { ExitThread(); });
             tray = new NotifyIcon { Icon = SystemIcons.Information, Text = "PoE2 工坊 · Ctrl+Alt+D 查价 · Ctrl+Alt+G 核对", ContextMenuStrip = menu, Visible = true };
-            tray.DoubleClick += delegate { OpenUrl(origin + "/?companion=1"); };
+            tray.DoubleClick += delegate { OpenWorkbench(); };
             window.Pressed += BeginCapture;
             timer = new System.Windows.Forms.Timer { Interval = 100 };
             timer.Tick += Tick; timer.Start();
@@ -229,7 +233,11 @@ namespace PoE2WorkbenchHotkeys {
                 if (requestGeneration != generation || disposed) { client.Dispose(); return; }
                 postClient = null; client.Dispose();
                 if (response.Cancelled || response.Error != null) {
-                    DisplayError("无法连接本地工坊。请运行 start-workbench.cmd，并保持网页打开。若游戏以管理员身份运行，请优先改为普通权限运行游戏。"); return;
+                    WebException connectionError = response.Error as WebException;
+                    HttpWebResponse rejected = connectionError == null ? null : connectionError.Response as HttpWebResponse;
+                    DisplayError(rejected == null
+                        ? "本地工坊服务没有响应。点击“在工坊查看”会启动后台服务；网页打开后请重新查价。也可运行 start-workbench.cmd。"
+                        : "工坊拒绝了这次请求（HTTP " + (int)rejected.StatusCode + "）。请在工坊检查装备文本，或稍后重试。"); return;
                 }
                 try {
                     Dictionary<string, object> payload = json.Deserialize<Dictionary<string, object>>(response.Result);
@@ -268,6 +276,17 @@ namespace PoE2WorkbenchHotkeys {
             object value; return payload.TryGetValue(key, out value) && value != null ? Convert.ToString(value) : "";
         }
         private bool SafeUrl(string url) { return Program.IsAllowedResultUrl(origin, url); }
+        private void OpenWorkbench() {
+            if (!File.Exists(launcherPath)) { OpenUrl(origin + "/?companion=1"); return; }
+            try {
+                ProcessStartInfo launch = new ProcessStartInfo("powershell.exe",
+                    "-NoProfile -ExecutionPolicy Bypass -File \"" + launcherPath + "\" -NoHotkeys -BaseUrl \"" + origin + "\"") {
+                    UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden
+                };
+                using (Process started = Process.Start(launch)) { }
+                panel.Display("正在连接工坊", "正在检查并启动后台服务，网页会在就绪后打开。请保留网页，然后重新使用快捷键。", itemSummary);
+            } catch { DisplayError("无法启动工坊，请手动运行 start-workbench.cmd。"); }
+        }
         private void OpenUrl(string url) {
             if (!SafeUrl(url)) return;
             try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
@@ -302,12 +321,12 @@ namespace PoE2WorkbenchHotkeys {
                 (uri.Scheme == "http" && uri.GetLeftPart(UriPartial.Authority) == origin);
         }
         [STAThread]
-        public static void Run(string baseUrl) {
+        public static void Run(string baseUrl, string startupScript) {
             bool created;
             using (Mutex mutex = new Mutex(false, @"Local\PoE2CraftWorkbenchHotkeys", out created)) {
                 if (!created) return;
                 Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
-                using (CompanionContext context = new CompanionContext(baseUrl)) { Application.Run(context); }
+                using (CompanionContext context = new CompanionContext(baseUrl, startupScript)) { Application.Run(context); }
             }
         }
     }
@@ -322,7 +341,7 @@ try {
         Write-Output 'Hotkey companion compiled successfully; no hotkeys registered or input sent.'
         return
     }
-    [PoE2WorkbenchHotkeys.Program]::Run($workbenchUri.GetLeftPart([UriPartial]::Authority))
+    [PoE2WorkbenchHotkeys.Program]::Run($workbenchUri.GetLeftPart([UriPartial]::Authority), (Join-Path $PSScriptRoot 'start-workbench.ps1'))
 } catch {
     if ($ValidateOnly) { throw }
     Add-Type -AssemblyName System.Windows.Forms

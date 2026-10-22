@@ -10,6 +10,7 @@ import type { ExistingItem, TargetInput } from '../lib/engine';
 import type { SolveResult } from '../lib/solve';
 import { computeWorkbench } from './compute';
 import { DEFAULT_OPTIONS } from './model';
+import { BOOTS_SAMPLE } from './fixtures/fullGear';
 import WorkbenchApp from './WorkbenchApp';
 
 vi.mock('../lib/engine', async (importOriginal) => {
@@ -58,6 +59,35 @@ describe('workbench target-source regression', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+  });
+
+  it('routes copied armour into all-equipment pricing without changing the crafting item or its source text', async () => {
+    const user = userEvent.setup();
+    restore([{ modId: ORDINARY_ID, tierDisplay: 3 }]);
+    const { container } = await ready();
+    const before = localStorage.getItem(STORAGE_KEY);
+    await user.click(screen.getByRole('button', { name: /粘贴游戏装备/ }));
+    await user.click(screen.getByRole('textbox', { name: '游戏装备文本' }));
+    await user.paste(BOOTS_SAMPLE);
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
+    await user.click(screen.getByRole('button', { name: /识别并导入/ }));
+    expect(await screen.findByText('Dusk Trail')).toBeVisible();
+    expect(container.querySelector('.wb-layout')).toHaveClass('is-equipment');
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
+    expect(computeWorkbench).not.toHaveBeenCalled();
+  });
+
+  it('opens the full character inventory independently from the crafting session', async () => {
+    const user = userEvent.setup();
+    restore();
+    await ready();
+    const before = localStorage.getItem(STORAGE_KEY);
+    const nav = screen.getByRole('navigation', { name: '工作区域' });
+    await user.click(within(nav).getByRole('button', { name: '角色装备' }));
+    expect(screen.getByRole('region', { name: '角色全身装备' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '左戒指：未装备' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '右戒指：未装备' })).toBeVisible();
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
   });
 
   it('explains a restored impossible Essence target and recovers to the same ordinary range without changing the item', async () => {

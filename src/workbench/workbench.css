@@ -85,4 +85,14 @@
 .wb-step .wb-currency-label{display:flex;align-items:center;gap:8px}
 .wb-step .wb-currency-art{display:inline-flex}
 .wb-next-icon .wb-currency-art{width:30px;height:30px}
+.wb-layout.is-equipment{grid-template-columns:minmax(0,1fr)}
+.wb-layout.is-equipment>.wb-item-column{display:none}
+.wb-companion-banner>.wb-actions{flex-shrink:0}
+.wb-equipment-trade>.wb-form-label{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--wb-muted);margin:18px 0}
+.wb-equipment-trade>.wb-form-label input{max-width:280px;padding:8px 10px;border:1px solid var(--wb-line);border-radius:5px;background:#131711;color:var(--wb-text)}
+.wb-price-estimate .wb-card{border:1px solid var(--wb-line);border-radius:7px;padding:13px;margin:12px 0;background:#13190f}
+.wb-price-estimate .wb-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.wb-price-estimate .wb-wrap{flex-wrap:wrap}
+.wb-price-estimate details>summary{cursor:pointer;color:var(--wb-green)}
+@media(max-width:800px){.wb-tabs{gap:17px;overflow-x:auto;white-space:nowrap}.wb-tabs button{flex-shrink:0}}
 @media(max-width:520px){.wb-currency-art.card{width:48px;height:48px}.wb-price-material{gap:5px}.wb-price-material .wb-currency-art{width:20px;height:20px}}

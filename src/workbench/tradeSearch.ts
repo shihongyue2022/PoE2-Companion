@@ -115,7 +115,7 @@ export interface FlexibleTradeOptions {
   readonly league: string;
   readonly baseId: string;
   readonly baseName?: string;
-  readonly rarity?: 'normal' | 'magic' | 'rare' | 'nonunique';
+  readonly rarity?: 'normal' | 'magic' | 'rare' | 'nonunique' | 'unique';
   readonly status?: 'any' | 'online' | 'securable';
   readonly itemLevelMin?: number;
   readonly itemLevelMax?: number;
@@ -139,14 +139,21 @@ interface StatGroup {
 
 export interface FlexibleTradeDocument {
   readonly query: {
+    readonly name?: string;
     readonly type?: string;
     readonly status: { readonly option: 'any' | 'online' | 'securable' };
     readonly filters: {
       readonly type_filters: { readonly filters: {
         readonly category: { readonly option: string };
         readonly rarity: { readonly option: NonNullable<FlexibleTradeOptions['rarity']> };
+        readonly ilvl?: { readonly min?: number; readonly max?: number };
       } };
-      readonly misc_filters?: { readonly filters: { readonly ilvl: { readonly min?: number; readonly max?: number } } };
+      readonly equipment_filters?: { readonly filters: Readonly<Record<string, { readonly min?: number; readonly max?: number }>> };
+      readonly misc_filters?: { readonly filters: {
+        readonly ilvl?: { readonly min?: number; readonly max?: number };
+        readonly identified?: { readonly option: 'true' | 'false' };
+        readonly corrupted?: { readonly option: 'true' | 'false' };
+      } };
     };
     readonly stats: readonly StatGroup[];
   };
