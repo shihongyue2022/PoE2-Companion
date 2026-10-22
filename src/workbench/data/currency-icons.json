@@ -1,0 +1,224 @@
+{
+    "schemaVersion":  1,
+    "verifiedAt":  "2026-10-22",
+    "artworkOwner":  "Grinding Gear Games",
+    "imageHost":  "web.poecdn.com",
+    "source":  {
+                   "provider":  "Grinding Gear Games",
+                   "url":  "https://www.pathofexile.com/api/trade2/data/static",
+                   "sha256":  "1d5d84c1b09cd24fa9354bef2714801b661381dcc70fbebe9d136cef515a01a4",
+                   "match":  "Exact English text field in the official trade2 static entries. Official image paths use the web.poecdn.com CDN."
+               },
+    "crossReference":  {
+                           "repository":  "https://github.com/Kvan7/Exiled-Exchange-2",
+                           "commit":  "572c1925e4737d2c5f79143d03280df9660c1d8f",
+                           "path":  "renderer/public/data/en/items.ndjson",
+                           "url":  "https://github.com/Kvan7/Exiled-Exchange-2/blob/572c1925e4737d2c5f79143d03280df9660c1d8f/renderer/public/data/en/items.ndjson",
+                           "sha256":  "b4757b4756433f5d729e93b0b25490fd72cd60cd54f6906aa9bd3a7053dfa139",
+                           "license":  "MIT",
+                           "licenseFile":  "LICENSE-EXILED-EXCHANGE-2.txt"
+                       },
+    "artworkRights":  "Game artwork remains owned by Grinding Gear Games; the MIT license of the cross-reference index does not relicense game images.",
+    "verification":  "Official trade2 static endpoint fetched with HTTP 200. Each currency matched one exact text entry and its image URL was cross-checked against the pinned Exiled Exchange 2 ITEM/name/refName record. Each distinct PNG URL fetched with HTTP 200, image/png, PNG signature and IHDR dimensions; bytes SHA-256 recorded. No URL guesses, cross-currency substitutions or derived tier fallbacks.",
+    "tierArtwork":  "The official trade2 static response explicitly assigns the same GGG image path to base, Greater and Perfect records of each currency family. Each tier was matched separately by name; retain the displayed tier label to distinguish these variants.",
+    "currencies":  {
+                       "transmute":  {
+                                         "name":  "Orb of Transmutation",
+                                         "tradeId":  "transmute",
+                                         "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lVcGdyYWRlVG9NYWdpYyIsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/2f8e1ff9f8/CurrencyUpgradeToMagic.png",
+                                         "contentType":  "image/png",
+                                         "httpStatus":  200,
+                                         "byteLength":  10271,
+                                         "width":  64,
+                                         "height":  64,
+                                         "sha256":  "5c2a910d4440dc37932cd8261c53e96afa5131b07aa82c3ec3d7d25bb80347a7"
+                                     },
+                       "augment":  {
+                                       "name":  "Orb of Augmentation",
+                                       "tradeId":  "aug",
+                                       "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lBZGRNb2RUb01hZ2ljIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/c8ad0ddc84/CurrencyAddModToMagic.png",
+                                       "contentType":  "image/png",
+                                       "httpStatus":  200,
+                                       "byteLength":  10269,
+                                       "width":  64,
+                                       "height":  64,
+                                       "sha256":  "c7934a64a971e2911f7e7bbb05d66ff72bfd90210da8efc7c297182f677586a9"
+                                   },
+                       "regal":  {
+                                     "name":  "Regal Orb",
+                                     "tradeId":  "regal",
+                                     "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lVcGdyYWRlTWFnaWNUb1JhcmUiLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/e8fb148e80/CurrencyUpgradeMagicToRare.png",
+                                     "contentType":  "image/png",
+                                     "httpStatus":  200,
+                                     "byteLength":  10516,
+                                     "width":  64,
+                                     "height":  64,
+                                     "sha256":  "a91fc9ef0d842033a9a37d50a3fa710e1f32d9116eca1adc6bbb891940ee38b2"
+                                 },
+                       "exalt":  {
+                                     "name":  "Exalted Orb",
+                                     "tradeId":  "exalted",
+                                     "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lBZGRNb2RUb1JhcmUiLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/ad7c366789/CurrencyAddModToRare.png",
+                                     "contentType":  "image/png",
+                                     "httpStatus":  200,
+                                     "byteLength":  10622,
+                                     "width":  64,
+                                     "height":  64,
+                                     "sha256":  "61678dd84a34547a8c43d357565349a4116ef231bbb1a1da36dcbaa4f6f35904"
+                                 },
+                       "annul":  {
+                                     "name":  "Orb of Annulment",
+                                     "tradeId":  "annul",
+                                     "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQW5udWxsT3JiIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/2daba8ccca/AnnullOrb.png",
+                                     "contentType":  "image/png",
+                                     "httpStatus":  200,
+                                     "byteLength":  6305,
+                                     "width":  48,
+                                     "height":  48,
+                                     "sha256":  "f8edd7ea901b41cf73448b3e8660b112d4bc2394cfbc653ab5839d49d74ea5fc"
+                                 },
+                       "chaos":  {
+                                     "name":  "Chaos Orb",
+                                     "tradeId":  "chaos",
+                                     "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lSZXJvbGxSYXJlIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/c0ca392a78/CurrencyRerollRare.png",
+                                     "contentType":  "image/png",
+                                     "httpStatus":  200,
+                                     "byteLength":  10590,
+                                     "width":  64,
+                                     "height":  64,
+                                     "sha256":  "5af276d1eb2605f29d2cacb52cf15e8b3bddb737a7d437aa46b97f93ec783b52"
+                                 },
+                       "alchemy":  {
+                                       "name":  "Orb of Alchemy",
+                                       "tradeId":  "alch",
+                                       "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lVcGdyYWRlVG9SYXJlIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/9b80b44821/CurrencyUpgradeToRare.png",
+                                       "contentType":  "image/png",
+                                       "httpStatus":  200,
+                                       "byteLength":  9920,
+                                       "width":  64,
+                                       "height":  64,
+                                       "sha256":  "f5843c7476de33271eb527e4a877469c60a169b08a591b3fee04d0fa8249efa0"
+                                   },
+                       "transmute_greater":  {
+                                                 "name":  "Greater Orb of Transmutation",
+                                                 "tradeId":  "greater-orb-of-transmutation",
+                                                 "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lVcGdyYWRlVG9NYWdpYyIsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/2f8e1ff9f8/CurrencyUpgradeToMagic.png",
+                                                 "contentType":  "image/png",
+                                                 "httpStatus":  200,
+                                                 "byteLength":  10271,
+                                                 "width":  64,
+                                                 "height":  64,
+                                                 "sha256":  "5c2a910d4440dc37932cd8261c53e96afa5131b07aa82c3ec3d7d25bb80347a7"
+                                             },
+                       "transmute_perfect":  {
+                                                 "name":  "Perfect Orb of Transmutation",
+                                                 "tradeId":  "perfect-orb-of-transmutation",
+                                                 "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lVcGdyYWRlVG9NYWdpYyIsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/2f8e1ff9f8/CurrencyUpgradeToMagic.png",
+                                                 "contentType":  "image/png",
+                                                 "httpStatus":  200,
+                                                 "byteLength":  10271,
+                                                 "width":  64,
+                                                 "height":  64,
+                                                 "sha256":  "5c2a910d4440dc37932cd8261c53e96afa5131b07aa82c3ec3d7d25bb80347a7"
+                                             },
+                       "augment_greater":  {
+                                               "name":  "Greater Orb of Augmentation",
+                                               "tradeId":  "greater-orb-of-augmentation",
+                                               "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lBZGRNb2RUb01hZ2ljIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/c8ad0ddc84/CurrencyAddModToMagic.png",
+                                               "contentType":  "image/png",
+                                               "httpStatus":  200,
+                                               "byteLength":  10269,
+                                               "width":  64,
+                                               "height":  64,
+                                               "sha256":  "c7934a64a971e2911f7e7bbb05d66ff72bfd90210da8efc7c297182f677586a9"
+                                           },
+                       "augment_perfect":  {
+                                               "name":  "Perfect Orb of Augmentation",
+                                               "tradeId":  "perfect-orb-of-augmentation",
+                                               "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lBZGRNb2RUb01hZ2ljIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/c8ad0ddc84/CurrencyAddModToMagic.png",
+                                               "contentType":  "image/png",
+                                               "httpStatus":  200,
+                                               "byteLength":  10269,
+                                               "width":  64,
+                                               "height":  64,
+                                               "sha256":  "c7934a64a971e2911f7e7bbb05d66ff72bfd90210da8efc7c297182f677586a9"
+                                           },
+                       "regal_greater":  {
+                                             "name":  "Greater Regal Orb",
+                                             "tradeId":  "greater-regal-orb",
+                                             "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lVcGdyYWRlTWFnaWNUb1JhcmUiLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/e8fb148e80/CurrencyUpgradeMagicToRare.png",
+                                             "contentType":  "image/png",
+                                             "httpStatus":  200,
+                                             "byteLength":  10516,
+                                             "width":  64,
+                                             "height":  64,
+                                             "sha256":  "a91fc9ef0d842033a9a37d50a3fa710e1f32d9116eca1adc6bbb891940ee38b2"
+                                         },
+                       "regal_perfect":  {
+                                             "name":  "Perfect Regal Orb",
+                                             "tradeId":  "perfect-regal-orb",
+                                             "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lVcGdyYWRlTWFnaWNUb1JhcmUiLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/e8fb148e80/CurrencyUpgradeMagicToRare.png",
+                                             "contentType":  "image/png",
+                                             "httpStatus":  200,
+                                             "byteLength":  10516,
+                                             "width":  64,
+                                             "height":  64,
+                                             "sha256":  "a91fc9ef0d842033a9a37d50a3fa710e1f32d9116eca1adc6bbb891940ee38b2"
+                                         },
+                       "exalt_greater":  {
+                                             "name":  "Greater Exalted Orb",
+                                             "tradeId":  "greater-exalted-orb",
+                                             "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lBZGRNb2RUb1JhcmUiLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/ad7c366789/CurrencyAddModToRare.png",
+                                             "contentType":  "image/png",
+                                             "httpStatus":  200,
+                                             "byteLength":  10622,
+                                             "width":  64,
+                                             "height":  64,
+                                             "sha256":  "61678dd84a34547a8c43d357565349a4116ef231bbb1a1da36dcbaa4f6f35904"
+                                         },
+                       "exalt_perfect":  {
+                                             "name":  "Perfect Exalted Orb",
+                                             "tradeId":  "perfect-exalted-orb",
+                                             "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lBZGRNb2RUb1JhcmUiLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/ad7c366789/CurrencyAddModToRare.png",
+                                             "contentType":  "image/png",
+                                             "httpStatus":  200,
+                                             "byteLength":  10622,
+                                             "width":  64,
+                                             "height":  64,
+                                             "sha256":  "61678dd84a34547a8c43d357565349a4116ef231bbb1a1da36dcbaa4f6f35904"
+                                         },
+                       "chaos_greater":  {
+                                             "name":  "Greater Chaos Orb",
+                                             "tradeId":  "greater-chaos-orb",
+                                             "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lSZXJvbGxSYXJlIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/c0ca392a78/CurrencyRerollRare.png",
+                                             "contentType":  "image/png",
+                                             "httpStatus":  200,
+                                             "byteLength":  10590,
+                                             "width":  64,
+                                             "height":  64,
+                                             "sha256":  "5af276d1eb2605f29d2cacb52cf15e8b3bddb737a7d437aa46b97f93ec783b52"
+                                         },
+                       "chaos_perfect":  {
+                                             "name":  "Perfect Chaos Orb",
+                                             "tradeId":  "perfect-chaos-orb",
+                                             "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lSZXJvbGxSYXJlIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/c0ca392a78/CurrencyRerollRare.png",
+                                             "contentType":  "image/png",
+                                             "httpStatus":  200,
+                                             "byteLength":  10590,
+                                             "width":  64,
+                                             "height":  64,
+                                             "sha256":  "5af276d1eb2605f29d2cacb52cf15e8b3bddb737a7d437aa46b97f93ec783b52"
+                                         },
+                       "divine":  {
+                                      "name":  "Divine Orb",
+                                      "tradeId":  "divine",
+                                      "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lNb2RWYWx1ZXMiLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/2986e220b3/CurrencyModValues.png",
+                                      "contentType":  "image/png",
+                                      "httpStatus":  200,
+                                      "byteLength":  8948,
+                                      "width":  64,
+                                      "height":  64,
+                                      "sha256":  "7bcdebef85551e18426bc93dd7e0a941b18782f8343be6c0130e2a69af2e53f3"
+                                  }
+                   }
+}

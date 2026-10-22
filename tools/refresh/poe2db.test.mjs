@@ -7,7 +7,16 @@
 // and deleted once that was measured.
 
 import { describe, it, expect } from 'vitest';
-import { stripHtml } from './poe2db.mjs';
+import { readFileSync } from 'node:fs';
+import { Buffer } from 'node:buffer';
+import { URL as NodeURL } from 'node:url';
+
+// Vite leaves a CRLF shebang behind when transforming this CLI module on Windows, then prepends
+// generated exports before it. Import the actual pinned local source through native ESM after
+// normalizing line endings and removing only its CLI shebang; every function remains unchanged.
+const source = readFileSync(new NodeURL('./poe2db.mjs', import.meta.url), 'utf8')
+  .replace(/\r\n/g, '\n').replace(/^#![^\n]*\n/, '');
+const { stripHtml } = await import(/* @vite-ignore */ `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 
 describe('stripHtml — turning poe2db’s HTML fragment into mod text', () => {
   it('drops tags and keeps the text', () => {

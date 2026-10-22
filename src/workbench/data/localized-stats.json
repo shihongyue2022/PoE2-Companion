@@ -1,0 +1,543 @@
+{
+  "source": "Exiled Exchange 2 generated game stat translations; English templates are the POE2_HTC 0.5.0 jewellery snapshot. Matchers are joined by stable ref and matching negate direction; unresolved lines remain visible.",
+  "revision": "cca30662bf31eaf38bd711e2ec1a6b899a06c40e",
+  "englishUrl": "https://github.com/Kvan7/Exiled-Exchange-2/blob/cca30662bf31eaf38bd711e2ec1a6b899a06c40e/renderer/public/data/en/stats.ndjson",
+  "traditionalUrl": "https://github.com/Kvan7/Exiled-Exchange-2/blob/cca30662bf31eaf38bd711e2ec1a6b899a06c40e/renderer/public/data/cmn-Hant/stats.ndjson",
+  "stats": [
+    {
+      "english": "+# to all Attributes",
+      "traditional": [
+        "#點全部能力值"
+      ]
+    },
+    {
+      "english": "+#% to all Elemental Resistances",
+      "traditional": [
+        "#%全元素抗性"
+      ]
+    },
+    {
+      "english": "+# to Spirit",
+      "traditional": [
+        "#精魂"
+      ]
+    },
+    {
+      "english": "+#% to Chaos Resistance",
+      "traditional": [
+        "#%混沌抗性"
+      ]
+    },
+    {
+      "english": "+#% to Cold Resistance",
+      "traditional": [
+        "#%冰冷抗性"
+      ]
+    },
+    {
+      "english": "#% increased Critical Hit Chance",
+      "traditional": [
+        "增加#%暴擊率"
+      ]
+    },
+    {
+      "english": "#% increased Critical Damage Bonus",
+      "traditional": [
+        "增加#%暴擊傷害加成"
+      ]
+    },
+    {
+      "english": "#% of Damage taken Recouped as Life",
+      "traditional": [
+        "承受的#%傷害補償為生命"
+      ]
+    },
+    {
+      "english": "#% increased Global Armour, Evasion and Energy Shield",
+      "traditional": [
+        "增加#%全域護甲、閃避、和能量護盾"
+      ]
+    },
+    {
+      "english": "#% increased Attack Damage while on Low Life",
+      "traditional": [
+        "貧血時增加#%攻擊傷害"
+      ]
+    },
+    {
+      "english": "Aura Skills have #% increased Magnitudes",
+      "traditional": [
+        "光環技能增加#%幅度"
+      ]
+    },
+    {
+      "english": "#% increased Armour from Equipped Body Armour",
+      "traditional": [
+        "來自已裝備身體護甲的護甲值增加#%"
+      ]
+    },
+    {
+      "english": "+#% to Cold and Chaos Resistances",
+      "traditional": [
+        "#%冰冷和混沌抗性"
+      ]
+    },
+    {
+      "english": "#% increased Cooldown Recovery Rate",
+      "traditional": [
+        "增加#%冷卻時間恢復率"
+      ]
+    },
+    {
+      "english": "#% of Damage is taken from Mana before Life",
+      "traditional": [
+        "生命值所受的#%傷害由魔力扣除"
+      ]
+    },
+    {
+      "english": "+# to Dexterity and Intelligence",
+      "traditional": [
+        "#點敏捷與智慧"
+      ]
+    },
+    {
+      "english": "#% increased Evasion Rating from Equipped Body Armour",
+      "traditional": [
+        "來自已裝備身體護甲的閃避值增加#%"
+      ]
+    },
+    {
+      "english": "#% increased Exposure Effect",
+      "traditional": [
+        "增加#%曝曬效果"
+      ]
+    },
+    {
+      "english": "+#% to Fire and Chaos Resistances",
+      "traditional": [
+        "#%火焰和混沌抗性"
+      ]
+    },
+    {
+      "english": "#% increased Deflection Rating",
+      "traditional": [
+        "增加#%偏斜值"
+      ]
+    },
+    {
+      "english": "Equipment and Skill Gems have #% reduced Attribute Requirements",
+      "traditional": [
+        "減少#%裝備與技能寶石的能力值需求"
+      ]
+    },
+    {
+      "english": "+#% to Quality of all Skills",
+      "traditional": [
+        "#%至全部技能的品質"
+      ]
+    },
+    {
+      "english": "#% chance for Skills to retain 40% of Glory on use",
+      "traditional": [
+        "技能有#%機率在使用後保持40%的榮耀",
+        "技能在使用後保持40%的榮耀"
+      ]
+    },
+    {
+      "english": "#% increased Reservation Efficiency of Herald Skills",
+      "traditional": [
+        "捷光環技能增加#%保留效用"
+      ]
+    },
+    {
+      "english": "Minions deal #% increased Damage if you've Hit Recently",
+      "traditional": [
+        "若你近期造成擊中 ，增加#%召喚物造成的傷害"
+      ]
+    },
+    {
+      "english": "#% increased Skill Speed",
+      "traditional": [
+        "增加#%技能速度"
+      ]
+    },
+    {
+      "english": "#% increased Spell Damage while on Full Energy Shield",
+      "traditional": [
+        "滿能量護盾時，增加#%法術傷害"
+      ]
+    },
+    {
+      "english": "+1 to Level of all Skills",
+      "traditional": [
+        "全部技能寶石等級#"
+      ]
+    },
+    {
+      "english": "Invocated Spells have #% chance to consume half as much Energy",
+      "traditional": [
+        "祈願法術有#%機率消耗一半的能量"
+      ]
+    },
+    {
+      "english": "+#% to Lightning and Chaos Resistances",
+      "traditional": [
+        "#%閃電和混沌抗性"
+      ]
+    },
+    {
+      "english": "Recover #% of maximum Mana on Kill",
+      "traditional": [
+        "擊殺時恢復#%魔力"
+      ]
+    },
+    {
+      "english": "#% increased Energy Shield from Equipped Body Armour",
+      "traditional": [
+        "增加#%已裝備身體護甲的能量護盾"
+      ]
+    },
+    {
+      "english": "Minions have #% increased Cooldown Recovery Rate",
+      "traditional": [
+        "增加#%召喚物的冷卻時間恢復率"
+      ]
+    },
+    {
+      "english": "Recover #% of maximum Life on Kill",
+      "traditional": [
+        "擊殺時恢復#%生命"
+      ]
+    },
+    {
+      "english": "Remnants you create have #% increased effect",
+      "traditional": [
+        "增加#%你產生的痕跡效果"
+      ]
+    },
+    {
+      "english": "Remnants can be collected from #% further away",
+      "traditional": [
+        "痕跡可從#%更遠距離撿拾"
+      ]
+    },
+    {
+      "english": "#% increased Skill Effect Duration",
+      "traditional": [
+        "增加#%技能效果持續時間"
+      ]
+    },
+    {
+      "english": "+# to Strength and Intelligence",
+      "traditional": [
+        "#點力量與智慧"
+      ]
+    },
+    {
+      "english": "+# to Strength and Dexterity",
+      "traditional": [
+        "#點力量與敏捷"
+      ]
+    },
+    {
+      "english": "+# to Dexterity",
+      "traditional": [
+        "#點敏捷"
+      ]
+    },
+    {
+      "english": "+# to maximum Energy Shield",
+      "traditional": [
+        "#最大能量護盾"
+      ]
+    },
+    {
+      "english": "+#% to Fire Resistance",
+      "traditional": [
+        "#%火焰抗性"
+      ]
+    },
+    {
+      "english": "+# to maximum Life",
+      "traditional": [
+        "#最大生命"
+      ]
+    },
+    {
+      "english": "+# to maximum Mana",
+      "traditional": [
+        "#最大魔力"
+      ]
+    },
+    {
+      "english": "#% increased Rarity of Items found",
+      "traditional": [
+        "增加#%找到的物品稀有度",
+        "增加#%地圖內找到的物品稀有度"
+      ]
+    },
+    {
+      "english": "+#% to Lightning Resistance",
+      "traditional": [
+        "#%閃電抗性"
+      ]
+    },
+    {
+      "english": "#% increased maximum Energy Shield",
+      "traditional": [
+        "增加#%最大能量護盾"
+      ]
+    },
+    {
+      "english": "#% increased Evasion Rating",
+      "traditional": [
+        "增加#%閃避值"
+      ]
+    },
+    {
+      "english": "+# to Level of all Melee Skills",
+      "traditional": [
+        "全部近戰技能的等級#"
+      ]
+    },
+    {
+      "english": "+# to Level of all Minion Skills",
+      "traditional": [
+        "全部召喚物技能等級#"
+      ]
+    },
+    {
+      "english": "+# to Level of all Projectile Skills",
+      "traditional": [
+        "全部投射物技能等級#"
+      ]
+    },
+    {
+      "english": "+# to Level of all Spell Skills",
+      "traditional": [
+        "全部法術技能等級#"
+      ]
+    },
+    {
+      "english": "#% increased Armour",
+      "traditional": [
+        "增加#%護甲值"
+      ]
+    },
+    {
+      "english": "+# to Accuracy Rating",
+      "traditional": [
+        "#命中值"
+      ]
+    },
+    {
+      "english": "#% increased Cast Speed",
+      "traditional": [
+        "增加#%施法速度"
+      ]
+    },
+    {
+      "english": "+# to Intelligence",
+      "traditional": [
+        "#點智慧"
+      ]
+    },
+    {
+      "english": "# Life Regeneration per second",
+      "traditional": [
+        "#每秒生命回復"
+      ]
+    },
+    {
+      "english": "#% increased Mana Regeneration Rate",
+      "traditional": [
+        "增加#%魔力回復率"
+      ]
+    },
+    {
+      "english": "#% increased maximum Life",
+      "traditional": [
+        "增加#%最大生命"
+      ]
+    },
+    {
+      "english": "#% increased maximum Mana",
+      "traditional": [
+        "增加#%最大魔力"
+      ]
+    },
+    {
+      "english": "#% of Damage taken Recouped as Mana",
+      "traditional": [
+        "承受的#%傷害補償為魔力",
+        "#%的承受傷害補償為魔力"
+      ]
+    },
+    {
+      "english": "#% increased Explicit Resistance Modifier magnitudes",
+      "traditional": [
+        "增加#%變動抗性詞綴的大小"
+      ]
+    },
+    {
+      "english": "+20% to Maximum Quality",
+      "traditional": [
+        "#%最大品質"
+      ]
+    },
+    {
+      "english": "#% increased maximum Runic Ward",
+      "traditional": [
+        "增加#%最大符文保護"
+      ]
+    },
+    {
+      "english": "#% increased Spell Damage",
+      "traditional": [
+        "增加#%法術傷害"
+      ]
+    },
+    {
+      "english": "+# to Strength",
+      "traditional": [
+        "#點力量"
+      ]
+    },
+    {
+      "english": "Adds 1 to # Cold damage to Attacks",
+      "traditional": [
+        "攻擊附加#至#冰冷傷害"
+      ]
+    },
+    {
+      "english": "#% increased Cold Damage",
+      "traditional": [
+        "增加#%冰冷傷害"
+      ]
+    },
+    {
+      "english": "#% increased Magnitude of Ignite if you've consumed an Endurance Charge Recently",
+      "traditional": [
+        "若你近期消耗過一顆耐力球，增加#%點燃幅度"
+      ]
+    },
+    {
+      "english": "#% increased Freeze Buildup if you've consumed an Power Charge Recently",
+      "traditional": [
+        "若你近期有消耗一顆暴擊球，增加#%冰凍累積"
+      ]
+    },
+    {
+      "english": "#% increased Magnitude of Shock if you've consumed a Frenzy Charge Recently",
+      "traditional": [
+        "若你近期消耗過一顆狂怒球，增加#%感電幅度"
+      ]
+    },
+    {
+      "english": "#% increased amount of Life Leeched",
+      "traditional": [
+        "增加#%生命偷取量"
+      ]
+    },
+    {
+      "english": "#% increased amount of Mana Leeched",
+      "traditional": [
+        "增加#%魔力偷取量"
+      ]
+    },
+    {
+      "english": "+# to Evasion Rating",
+      "traditional": [
+        "#閃避值"
+      ]
+    },
+    {
+      "english": "Adds # to 3 Fire damage to Attacks",
+      "traditional": [
+        "攻擊附加#至#火焰傷害"
+      ]
+    },
+    {
+      "english": "#% increased Fire Damage",
+      "traditional": [
+        "增加#%火焰傷害"
+      ]
+    },
+    {
+      "english": "#% increased Chaos Damage",
+      "traditional": [
+        "增加#%混沌傷害"
+      ]
+    },
+    {
+      "english": "Gain # Life per enemy killed",
+      "traditional": [
+        "每個被擊殺的敵人，獲得#生命"
+      ]
+    },
+    {
+      "english": "Leech #% of Physical Attack Damage as Life",
+      "traditional": [
+        "以#%物理攻擊傷害偷取生命"
+      ]
+    },
+    {
+      "english": "Adds 1 to # Lightning damage to Attacks",
+      "traditional": [
+        "攻擊附加#至#閃電傷害"
+      ]
+    },
+    {
+      "english": "#% increased Lightning Damage",
+      "traditional": [
+        "增加#%閃電傷害"
+      ]
+    },
+    {
+      "english": "Gain # Mana per enemy killed",
+      "traditional": [
+        "每個被擊殺的敵人，獲得#魔力"
+      ]
+    },
+    {
+      "english": "Leech #% of Physical Attack Damage as Mana",
+      "traditional": [
+        "以#%物理攻擊傷害偷取魔力"
+      ]
+    },
+    {
+      "english": "+# to maximum Runic Ward",
+      "traditional": [
+        "#最大符文保護"
+      ]
+    },
+    {
+      "english": "#% increased Attack Speed",
+      "traditional": [
+        "增加#%攻擊速度"
+      ]
+    },
+    {
+      "english": "Adds # to 3 Physical Damage to Attacks",
+      "traditional": [
+        "攻擊附加#至#物理傷害"
+      ]
+    },
+    {
+      "english": "Mark of the Abyssal Lord",
+      "traditional": [
+        "帶有深淵領主印記"
+      ]
+    },
+    {
+      "english": "#% increased Strength, Dexterity or Intelligence",
+      "traditional": []
+    },
+    {
+      "english": "5% increased Light Radius\n#% increased Mana Regeneration Rate",
+      "traditional": [
+        "增加5%照亮範圍\n增加#%魔力回復率"
+      ]
+    }
+  ]
+}

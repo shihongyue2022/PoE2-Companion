@@ -50,6 +50,8 @@ export default tseslint.config(
           // wagging the dog.
           allowDefaultProject: [
             'vitest.config.ts', 'vite.config.ts',
+            // The local Vite HTTP bridge runs in Node and belongs to no application tsconfig.
+            'tools/workbenchServer.ts', 'tools/workbenchServer.test.ts',
             // Measurement and cross-check scripts, run ad hoc with `node --experimental-strip-types`.
             // They belong to no build, so no tsconfig includes them.
             'scripts/*.mts',
@@ -166,7 +168,7 @@ export default tseslint.config(
   // after the globals below would silently replace them and every `console` would read as undefined.
   {
     files: [
-      'tools/**/*.{mjs,js}', 'scripts/**/*.{mjs,js,mts}', '*.config.{js,ts}', 'eslint.config.js',
+      'tools/**/*.{mjs,js}', 'tools/workbenchServer*.ts', 'scripts/**/*.{mjs,js,mts}', '*.config.{js,ts}', 'eslint.config.js',
       'e2e/**/*.mjs',
     ],
     ...tseslint.configs.disableTypeChecked,
@@ -180,6 +182,10 @@ export default tseslint.config(
       // straight into the pull-request body.
       'no-console': 'off',
     },
+  },
+  {
+    files: ['tools/workbenchServer*.ts'],
+    extends: [...tseslint.configs.recommended],
   },
   // A declaration file declares signatures and binds nothing: its parameter names are documentation,
   // so `no-unused-vars` reports every one of them. `tools/refresh/modText.d.mts` exists because a test

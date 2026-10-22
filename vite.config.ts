@@ -7,6 +7,7 @@ import type { Plugin } from "vite"
 import { shipModsJson } from "./packages/engine/src/shipMods.ts"
 import { userGuidePlugin } from "./src/lib/guide/vitePlugin.ts"
 import type { ModsFile } from "./packages/engine/src/indexPatch.ts"
+import { workbenchServerPlugin } from "./tools/workbenchServer.ts"
 
 /** The emitted patch-data assets. One regex, because two plugins below both have to find them. */
 const JSON_ASSET_RE = /^static\/json\/.*\.json$/
@@ -155,10 +156,10 @@ const analyze = process.env.ANALYZE === "1"
 export default defineConfig({
   plugins: [
     react(),
+    workbenchServerPlugin(),
     shipPatchData(),
     userGuidePlugin(__dirname),
     preloadPatchData(),
-    warnIfUnmonitored(),
     ...(analyze ? [visualizer({ filename: "dist/stats.html", gzipSize: true, brotliSize: false })] : []),
   ],
   base: "./",
@@ -214,5 +215,13 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: '127.0.0.1',
+    proxy: {
+      '/api/poe/leagues': {
+        target: 'https://www.pathofexile.com',
+        changeOrigin: true,
+        rewrite: () => '/api/trade2/data/leagues',
+      },
+    },
   },
 })

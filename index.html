@@ -1,104 +1,15 @@
-<!DOCTYPE html>
-<!-- `dark` is static: src/index.css defines a single dark palette on :root and there is no theme
-     toggle, so Tailwind's dark: variants should always be active. Without this class they are all
-     inert and their light-mode fallbacks (text-rose-600, text-amber-700, …) render on the dark
-     background — which is low-contrast and was the bug this fixes. -->
-<html lang="en" class="dark">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    
-    <!-- SEO Meta Tags -->
-    <title>POE2HTC - Path of Exile 2 Crafting Calculator & Optimizer</title>
-    <meta name="description" content="Free Path of Exile 2 crafting calculator. Find the optimal crafting route, the true expected cost of playing well, and your real odds — priced from live market data. Runs entirely in your browser." />
-    <meta name="keywords" content="Path of Exile 2, PoE2, crafting calculator, item crafting, currency optimizer, crafting simulator, PoE2 tools, path of exile crafting" />
-    <meta name="author" content="Dboire" />
-    
-    <!-- Open Graph / Social Media.
-         The image is rendered from scripts/og-card.html by `npm run og` — edit the card, not the jpg.
-
-         The ?v= IS the point of that query string, not decoration. Discord, Slack, X and Facebook all
-         cache a link preview against the image URL and hold it for a long time, so replacing the file
-         at the same path leaves everyone who has seen the old card still seeing it — including in
-         messages already posted. Bump the number whenever the image changes; the URL is the only
-         cache key any of them expose. -->
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://poe2htc.com/" />
-    <meta property="og:title" content="POE2HTC - Path of Exile 2 Crafting Calculator" />
-    <meta property="og:description" content="Free Path of Exile 2 crafting calculator. The optimal route, the true expected cost, and your real odds — priced from live market data." />
-    <meta property="og:image" content="https://poe2htc.com/og.jpg?v=2" />
-    <meta property="og:image:width" content="2400" />
-    <meta property="og:image:height" content="1260" />
-    <meta property="og:image:type" content="image/jpeg" />
-    <meta property="og:image:alt" content="POE2 HTC — hammer and anvil logo above the line “Path of Exile 2 crafting, solved — not guessed”, with optimal route, true expected cost, exact odds and live prices" />
-    <meta property="og:site_name" content="POE2 HTC" />
-    
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://poe2htc.com/" />
-    <meta name="twitter:title" content="POE2HTC - Path of Exile 2 Crafting Calculator" />
-    <meta name="twitter:description" content="Free Path of Exile 2 crafting calculator. The optimal route, the true expected cost, and your real odds — priced from live market data." />
-    <meta name="twitter:image" content="https://poe2htc.com/og.jpg?v=2" />
-    
-    <!-- Canonical URL -->
-    <link rel="canonical" href="https://poe2htc.com/" />
-    
-    <!-- Caching is set by real response headers in vercel.json, not here: browsers ignore
-         http-equiv Cache-Control for the document and never applied it to subresources at all. The
-         tags that used to sit here said "no-store", which is the opposite of what this site wants —
-         every asset filename is content-hashed, so they can be cached forever and only index.html
-         needs revalidating. A 3.1 MB mods.json re-downloaded on every visit was the cost. -->
-
-    <!-- The Content-Security-Policy is a REAL RESPONSE HEADER, set in vercel.json — not a meta tag.
-         A meta CSP silently ignores `frame-ancestors`, so the one that used to live here never
-         stopped anyone iframing the site; and being part of the document it applied in dev too, so
-         the ws://localhost allowances Vite's HMR needs were shipping to production and could not be
-         removed without breaking `npm run dev`. src/lib/deployConfig.test.ts pins the header. -->
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png" />
-    <link rel="icon" type="image/x-icon" href="/icon.ico" />
-    <link rel="apple-touch-icon" href="/icon.png" />
-  </head>
-  <body>
-    <!--
-      INSIDE #root ON PURPOSE, and it is not decoration.
-
-      This body used to be an empty <div>, so a crawler that fetched the page and did not run (or
-      finished running) the JavaScript saw a document with zero visible text. Google files that as a
-      SOFT 404 — a URL that answers 200 while looking like nothing is there — and Search Console
-      reported one for this site on 2026-09-06.
-
-      React removes it: `createRoot(el).render(...)` replaces whatever the container held, which is
-      pinned by a test rather than assumed. So real visitors see this only for the moment before the
-      bundle boots, where it beats a blank screen anyway; a crawler that never runs the script sees a
-      description of the page that is true.
-
-      Keep it HONEST and keep it in step with the meta description above. It is the only text some
-      readers of this page will ever get, which makes it the one place in the app where an
-      overstatement would be least visible and most damaging.
-    -->
-    <div id="root">
-      <main style="max-width:44rem;margin:0 auto;padding:3rem 1.25rem;font-family:system-ui,sans-serif;color:#e7e5e4">
-        <h1 style="font-size:1.6rem;margin:0 0 .75rem">POE2HTC — Path of Exile 2 crafting calculator</h1>
-        <p style="line-height:1.6;margin:0 0 1rem">
-          Tell it the base and the modifiers you want, and it works out how to craft the item and what
-          that will cost. The probabilities are computed exactly from Path of Exile 2's real modifier
-          weight pools — not simulated — and every route is priced from live poe.ninja market data.
-        </p>
-        <ul style="line-height:1.7;padding-left:1.1rem;margin:0 0 1rem">
-          <li>Plan a craft from a white base, or from an item you are already holding</li>
-          <li>The cheapest route and the surest route, with the odds for each</li>
-          <li>True expected cost — what the craft costs playing optimally, recovering after a bad roll
-              rather than starting over</li>
-          <li>Budget mode, currency you do not own, and shareable links</li>
-        </ul>
-        <p style="line-height:1.6;margin:0">
-          Free, no account, nothing to install — the whole engine runs in your browser.
-          <noscript><strong>It needs JavaScript enabled.</strong></noscript>
-        </p>
-      </main>
-    </div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<!doctype html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="个人本地 PoE2 制作工坊：繁体装备导入、简体词缀检索、制作策略、模拟与官方交易搜索。" />
+  <title>PoE2 制作工坊 · Craft Lab</title>
+  <meta name="theme-color" content="#101310" />
+  <link rel="icon" type="image/svg+xml" href="/workbench.svg" />
+</head>
+<body style="margin:0;background:#101310">
+  <div id="root"><main style="max-width:42rem;margin:4rem auto;padding:1.5rem;color:#d5dfc5;font-family:system-ui,sans-serif"><h1>PoE2 制作工坊</h1><p>正在加载本地制作引擎与词缀数据…</p><noscript>请启用 JavaScript 以使用制作工坊。</noscript></main></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
 </html>

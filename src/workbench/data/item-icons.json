@@ -1,0 +1,420 @@
+{
+    "schemaVersion":  1,
+    "verifiedAt":  "2026-10-22",
+    "artworkOwner":  "Grinding Gear Games",
+    "imageHost":  "web.poecdn.com",
+    "source":  {
+                   "repository":  "https://github.com/Kvan7/Exiled-Exchange-2",
+                   "commit":  "572c1925e4737d2c5f79143d03280df9660c1d8f",
+                   "path":  "renderer/public/data/en/items.ndjson",
+                   "url":  "https://github.com/Kvan7/Exiled-Exchange-2/blob/572c1925e4737d2c5f79143d03280df9660c1d8f/renderer/public/data/en/items.ndjson",
+                   "license":  "MIT",
+                   "licenseFile":  "LICENSE-EXILED-EXCHANGE-2.txt"
+               },
+    "verification":  "Each distinct URL fetched with HTTP 200, image/png, PNG signature and IHDR dimensions; bytes SHA-256 recorded. Only exact ITEM namespace/base-name matches were included. No generated URL guesses or unique-item artwork substitutions.",
+    "items":  {
+                  "Amethyst Ring":  {
+                                        "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQmFzZXR5cGVzL0FtZXRoeXN0UmluZyIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/352427171d/AmethystRing.png",
+                                        "contentType":  "image/png",
+                                        "httpStatus":  200,
+                                        "byteLength":  6365,
+                                        "width":  47,
+                                        "height":  47,
+                                        "sha256":  "8011545b14a396cb60c9d4b8568bbe88b35885468b0f23bf45de6fdde56fd830"
+                                    },
+                  "Biostatic Ring":  {
+                                         "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQnJlYWNobG9yZFJpbmdfVHVsIiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/e2c3741e78/BreachlordRing_Tul.png",
+                                         "contentType":  "image/png",
+                                         "httpStatus":  200,
+                                         "byteLength":  5686,
+                                         "width":  47,
+                                         "height":  47,
+                                         "sha256":  "0842198a92f52d79a20d29e8dfbd17f64820ae2b97eeeb3c38cec71022d74e9f"
+                                     },
+                  "Breach Ring":  {
+                                      "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQmFzZXR5cGVzL0JyZWFjaFJpbmciLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/cffe574bd0/BreachRing.png",
+                                      "contentType":  "image/png",
+                                      "httpStatus":  200,
+                                      "byteLength":  6670,
+                                      "width":  47,
+                                      "height":  47,
+                                      "sha256":  "2d02920830790ae8291d4a5f8b505273acf9b3d6b00c15fc2c1d5ec5d516e2af"
+                                  },
+                  "Dusk Ring":  {
+                                    "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvTGFrZVJpbmcxIiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/40b81baee3/LakeRing1.png",
+                                    "contentType":  "image/png",
+                                    "httpStatus":  200,
+                                    "byteLength":  5216,
+                                    "width":  47,
+                                    "height":  47,
+                                    "sha256":  "e0bc39ef2c5464c148c7f085f50b8745e094e8d4beef2e3a66d82a8e59ae4474"
+                                },
+                  "Emerald Ring":  {
+                                       "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQmFzZXR5cGVzL0VtZXJhbGRSaW5nIiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/26e8b227bb/EmeraldRing.png",
+                                       "contentType":  "image/png",
+                                       "httpStatus":  200,
+                                       "byteLength":  6468,
+                                       "width":  47,
+                                       "height":  47,
+                                       "sha256":  "6638d37f132ba8ba7078b46f874564dc7cb8e007bf11e2e899bddb050f38c446"
+                                   },
+                  "Gloam Ring":  {
+                                     "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvTGFrZVJpbmcyIiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/1d066f9123/LakeRing2.png",
+                                     "contentType":  "image/png",
+                                     "httpStatus":  200,
+                                     "byteLength":  5161,
+                                     "width":  47,
+                                     "height":  47,
+                                     "sha256":  "0f3f0d5a0f6cbb54a8e4b94c4bebf8f1c9c15602b8c965c240d417c658662933"
+                                 },
+                  "Gold Ring":  {
+                                    "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQmFzZXR5cGVzL0dvbGRSaW5nIiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/a138f2df65/GoldRing.png",
+                                    "contentType":  "image/png",
+                                    "httpStatus":  200,
+                                    "byteLength":  6159,
+                                    "width":  47,
+                                    "height":  47,
+                                    "sha256":  "32dc23fa6e8dfd236ac3f9509ffd954ccadc90ffa207b250f46d13fa28715b96"
+                                },
+                  "Grasping Ring":  {
+                                        "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQnJlYWNobG9yZFJpbmdfRm9ybWxlc3MiLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/e9a9445916/BreachlordRing_Formless.png",
+                                        "contentType":  "image/png",
+                                        "httpStatus":  200,
+                                        "byteLength":  5525,
+                                        "width":  47,
+                                        "height":  47,
+                                        "sha256":  "1df5a3d821bd2d06a685f7f2eb835377660a4e8c31414ffc6ec8abb24310bbd8"
+                                    },
+                  "Iron Ring":  {
+                                    "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQmFzZXR5cGVzL0lyb25SaW5nIiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/155a44583e/IronRing.png",
+                                    "contentType":  "image/png",
+                                    "httpStatus":  200,
+                                    "byteLength":  6264,
+                                    "width":  47,
+                                    "height":  47,
+                                    "sha256":  "a12dff8a48f97604d789c40c433009b8709192e076c2e12d6801654c56e850fe"
+                                },
+                  "Kinetic Ring":  {
+                                       "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQnJlYWNobG9yZFJpbmdfVXVsTmV0b2wiLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/ea650a6daa/BreachlordRing_UulNetol.png",
+                                       "contentType":  "image/png",
+                                       "httpStatus":  200,
+                                       "byteLength":  6229,
+                                       "width":  47,
+                                       "height":  47,
+                                       "sha256":  "a7608426b63106eda0c99b92bb3da2ac90dd4fd21a3e4ac8ac361aa79be7b652"
+                                   },
+                  "Lazuli Ring":  {
+                                      "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQmFzZXR5cGVzL0xhenVsaVJpbmciLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/53f4255f0b/LazuliRing.png",
+                                      "contentType":  "image/png",
+                                      "httpStatus":  200,
+                                      "byteLength":  5950,
+                                      "width":  47,
+                                      "height":  47,
+                                      "sha256":  "df1a806f8dc6b42a2f6ead74f40486a96a427442e802e1674ef2e2967ed03e99"
+                                  },
+                  "Mnemonic Ring":  {
+                                        "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQnJlYWNobG9yZFJpbmdfRXNoIiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/201c189905/BreachlordRing_Esh.png",
+                                        "contentType":  "image/png",
+                                        "httpStatus":  200,
+                                        "byteLength":  6250,
+                                        "width":  47,
+                                        "height":  47,
+                                        "sha256":  "73d3495040d7c288b20f3d6f80708e5271a9e21c649f4f1786ba59c342547595"
+                                    },
+                  "Oneiric Ring":  {
+                                       "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQnJlYWNobG9yZFJpbmdfQ2hheXVsYSIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/a1763a74e7/BreachlordRing_Chayula.png",
+                                       "contentType":  "image/png",
+                                       "httpStatus":  200,
+                                       "byteLength":  5485,
+                                       "width":  47,
+                                       "height":  47,
+                                       "sha256":  "64bc86e4ccc1cb0cb597728dc42933068031e6f708ab12480e12df350c3dfe53"
+                                   },
+                  "Pearl Ring":  {
+                                     "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQmFzZXR5cGVzL1BlYXJsUmluZyIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/5d008028ac/PearlRing.png",
+                                     "contentType":  "image/png",
+                                     "httpStatus":  200,
+                                     "byteLength":  6086,
+                                     "width":  47,
+                                     "height":  47,
+                                     "sha256":  "ad6f1177d153e73e75993337741a5b026db969047ab96d853213a22fce779b43"
+                                 },
+                  "Penumbra Ring":  {
+                                        "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvTGFrZVJpbmczIiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/df9298fd1a/LakeRing3.png",
+                                        "contentType":  "image/png",
+                                        "httpStatus":  200,
+                                        "byteLength":  5201,
+                                        "width":  47,
+                                        "height":  47,
+                                        "sha256":  "a6a5ddf2d1645e63ec1d3a7006ba94ce5dede5c23c06c30a92bd373ec05fa09a"
+                                    },
+                  "Prismatic Ring":  {
+                                         "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQmFzZXR5cGVzL1ByaXNtYXRpY1JpbmciLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/a9bd534c46/PrismaticRing.png",
+                                         "contentType":  "image/png",
+                                         "httpStatus":  200,
+                                         "byteLength":  6338,
+                                         "width":  47,
+                                         "height":  47,
+                                         "sha256":  "3260dd0612b990bb1567b8dbf9c7103a2b2f3e0d36ead336abc33632d5507e57"
+                                     },
+                  "Refined Breach Ring":  {
+                                              "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQmFzZXR5cGVzL0JyZWFjaFJpbmciLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/cffe574bd0/BreachRing.png",
+                                              "contentType":  "image/png",
+                                              "httpStatus":  200,
+                                              "byteLength":  6670,
+                                              "width":  47,
+                                              "height":  47,
+                                              "sha256":  "2d02920830790ae8291d4a5f8b505273acf9b3d6b00c15fc2c1d5ec5d516e2af"
+                                          },
+                  "Ruby Ring":  {
+                                    "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQmFzZXR5cGVzL1J1YnlSaW5nIiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/4f0e6f99c1/RubyRing.png",
+                                    "contentType":  "image/png",
+                                    "httpStatus":  200,
+                                    "byteLength":  6393,
+                                    "width":  47,
+                                    "height":  47,
+                                    "sha256":  "dc0bf24a05c53447d6d549bb5a71a5a1a243db97591c98ff550885306f10e84d"
+                                },
+                  "Sapphire Ring":  {
+                                        "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQmFzZXR5cGVzL1NhcHBoaXJlUmluZyIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/14608c24b1/SapphireRing.png",
+                                        "contentType":  "image/png",
+                                        "httpStatus":  200,
+                                        "byteLength":  6288,
+                                        "width":  47,
+                                        "height":  47,
+                                        "sha256":  "8f2f3dabef0f7e22f816d82502e50153531d28cc0117d6f4b06f4f611592db22"
+                                    },
+                  "Tenebrous Ring":  {
+                                         "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvTGFrZVJpbmc0IiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/c6a4a54692/LakeRing4.png",
+                                         "contentType":  "image/png",
+                                         "httpStatus":  200,
+                                         "byteLength":  5111,
+                                         "width":  47,
+                                         "height":  47,
+                                         "sha256":  "d6096646ce5ef27413bdeb2f237832780d95a70a5c2906658069c712e0b22ed5"
+                                     },
+                  "Topaz Ring":  {
+                                     "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQmFzZXR5cGVzL1RvcGF6UmluZyIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/83315d9397/TopazRing.png",
+                                     "contentType":  "image/png",
+                                     "httpStatus":  200,
+                                     "byteLength":  6566,
+                                     "width":  47,
+                                     "height":  47,
+                                     "sha256":  "659e196b2baae20f38a8c2ef503e18a037694eaf6b2ddfa75b37c1de5d400658"
+                                 },
+                  "Unset Ring":  {
+                                     "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQmFzZXR5cGVzL1Vuc2V0UmluZyIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/79ee559b51/UnsetRing.png",
+                                     "contentType":  "image/png",
+                                     "httpStatus":  200,
+                                     "byteLength":  6001,
+                                     "width":  47,
+                                     "height":  47,
+                                     "sha256":  "bc07cb2c6fd866fd513a142b45bf3129254c37a7627f0eab7ce6df8f89797bfa"
+                                 },
+                  "Vitalic Ring":  {
+                                       "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvUmluZ3MvQnJlYWNobG9yZFJpbmdfWG9waCIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/4dab9e4fd8/BreachlordRing_Xoph.png",
+                                       "contentType":  "image/png",
+                                       "httpStatus":  200,
+                                       "byteLength":  6207,
+                                       "width":  47,
+                                       "height":  47,
+                                       "sha256":  "3310a953e1e3cdc23884c250490d5dc61639452cf8cbe3be9cad1a25cb73249a"
+                                   },
+                  "Absent Amulet":  {
+                                        "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvQWJzZW50QW11bGV0IiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/4f9543d85e/AbsentAmulet.png",
+                                        "contentType":  "image/png",
+                                        "httpStatus":  200,
+                                        "byteLength":  5805,
+                                        "width":  47,
+                                        "height":  47,
+                                        "sha256":  "bf844a4a412e8edde7559074c039b2a4210bbfe001c99691fe4e07e0a3ee0ede"
+                                    },
+                  "Amber Amulet":  {
+                                       "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvQW1iZXJBbXVsZXQiLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/b2698b19ad/AmberAmulet.png",
+                                       "contentType":  "image/png",
+                                       "httpStatus":  200,
+                                       "byteLength":  5769,
+                                       "width":  47,
+                                       "height":  47,
+                                       "sha256":  "f5dc0024b4c7b2fc42a6c1d4977966cb5ac20c732bb6e558b2a3cb698ccf45a3"
+                                   },
+                  "Azure Amulet":  {
+                                       "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvQXp1cmVBbXVsZXQiLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/e49b170ba2/AzureAmulet.png",
+                                       "contentType":  "image/png",
+                                       "httpStatus":  200,
+                                       "byteLength":  5846,
+                                       "width":  47,
+                                       "height":  47,
+                                       "sha256":  "10844adcb8a7a4b89f40f625dc286e10570266aac9570638af9ddf11e4a8b3d1"
+                                   },
+                  "Bloodstone Amulet":  {
+                                            "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvQmxvb2RzdG9uZUFtdWxldCIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/f8bbf74c8e/BloodstoneAmulet.png",
+                                            "contentType":  "image/png",
+                                            "httpStatus":  200,
+                                            "byteLength":  3977,
+                                            "width":  47,
+                                            "height":  47,
+                                            "sha256":  "d22fa4a5b0796aad37cf186ed27002840abd903a862ed5426c7e73ca9ad15da3"
+                                        },
+                  "Corona Amulet":  {
+                                        "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvQ29yb25hQW11bGV0IiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/36be17c3d4/CoronaAmulet.png",
+                                        "contentType":  "image/png",
+                                        "httpStatus":  200,
+                                        "byteLength":  6080,
+                                        "width":  47,
+                                        "height":  47,
+                                        "sha256":  "350078c74180513a6bb788b59177ed807beffe5f8b6a82ae2803c7460f9b7713"
+                                    },
+                  "Crimson Amulet":  {
+                                         "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvQ3JpbXNvbkFtdWxldCIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/6306715ae7/CrimsonAmulet.png",
+                                         "contentType":  "image/png",
+                                         "httpStatus":  200,
+                                         "byteLength":  5528,
+                                         "width":  47,
+                                         "height":  47,
+                                         "sha256":  "8c5c944e5cc37e22741d864619f17278bc0d77018cf8b9d6e49697f045d27643"
+                                     },
+                  "Distorted Amulet":  {
+                                           "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvRGlzdG9ydGVkQW11bGV0IiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/21e5bd5fad/DistortedAmulet.png",
+                                           "contentType":  "image/png",
+                                           "httpStatus":  200,
+                                           "byteLength":  5538,
+                                           "width":  47,
+                                           "height":  47,
+                                           "sha256":  "8ac72793c016d5aae6f4233c85029fffe4e1e3b173b396d197041abdad9b0554"
+                                       },
+                  "Dusk Amulet":  {
+                                      "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9IZWlzdEFtdWxldDEiLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/aa9c53b2c8/HeistAmulet1.png",
+                                      "contentType":  "image/png",
+                                      "httpStatus":  200,
+                                      "byteLength":  5401,
+                                      "width":  47,
+                                      "height":  47,
+                                      "sha256":  "1b7ceeb567ac1f83b98b3f6162e8a90bc0b30d6c068a5ac3fd1cc72da4c576f4"
+                                  },
+                  "Gloam Amulet":  {
+                                       "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9IZWlzdEFtdWxldDEiLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/aa9c53b2c8/HeistAmulet1.png",
+                                       "contentType":  "image/png",
+                                       "httpStatus":  200,
+                                       "byteLength":  5401,
+                                       "width":  47,
+                                       "height":  47,
+                                       "sha256":  "1b7ceeb567ac1f83b98b3f6162e8a90bc0b30d6c068a5ac3fd1cc72da4c576f4"
+                                   },
+                  "Gold Amulet":  {
+                                      "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvR29sZEFtdWxldCIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/7da5b5dc6e/GoldAmulet.png",
+                                      "contentType":  "image/png",
+                                      "httpStatus":  200,
+                                      "byteLength":  6324,
+                                      "width":  47,
+                                      "height":  47,
+                                      "sha256":  "e196017aa75b2ad23b7c65bdf7c0b3ea3c1f752d38e3c436af99a6ec7771bb4b"
+                                  },
+                  "Jade Amulet":  {
+                                      "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvSmFkZUFtdWxldCIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/ac51014172/JadeAmulet.png",
+                                      "contentType":  "image/png",
+                                      "httpStatus":  200,
+                                      "byteLength":  4596,
+                                      "width":  47,
+                                      "height":  47,
+                                      "sha256":  "b377f82833b7c6f250c126d85b881885ea2bb2164021c1cc3c99f60ee6633108"
+                                  },
+                  "Lament Amulet":  {
+                                        "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvTGFtZW50QW11bGV0IiwidyI6MSwiaCI6MSwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/60fb193cde/LamentAmulet.png",
+                                        "contentType":  "image/png",
+                                        "httpStatus":  200,
+                                        "byteLength":  5347,
+                                        "width":  47,
+                                        "height":  47,
+                                        "sha256":  "af14ee870237b55d675ed6360eb4e26dbe956221c1dc7f727f9cced240b2d5ac"
+                                    },
+                  "Lapis Amulet":  {
+                                       "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvTGFwaXNBbXVsZXQiLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/572eeaf30b/LapisAmulet.png",
+                                       "contentType":  "image/png",
+                                       "httpStatus":  200,
+                                       "byteLength":  5635,
+                                       "width":  47,
+                                       "height":  47,
+                                       "sha256":  "eb98228f7f0e28a1cb90a581dcc58d1bfb1238d2c3cfa1a9f07b17fe3da44e91"
+                                   },
+                  "Lunar Amulet":  {
+                                       "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvTHVuYXJBbXVsZXQiLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/e0eef02a23/LunarAmulet.png",
+                                       "contentType":  "image/png",
+                                       "httpStatus":  200,
+                                       "byteLength":  4847,
+                                       "width":  47,
+                                       "height":  47,
+                                       "sha256":  "67302e25bad684f9cbcbb63f545544ae10e47e8f5a9f707df0178df9c63fe69d"
+                                   },
+                  "Pearlescent Amulet":  {
+                                             "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvUGVhcmxlc2NlbnRBbXVsZXQiLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/faa99c5286/PearlescentAmulet.png",
+                                             "contentType":  "image/png",
+                                             "httpStatus":  200,
+                                             "byteLength":  5677,
+                                             "width":  47,
+                                             "height":  47,
+                                             "sha256":  "f8e4bdd5d44540bd22e7aadcdbf79a6c754a80bd7a00a0378ef6320cbe703be3"
+                                         },
+                  "Penumbra Amulet":  {
+                                          "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9IZWlzdEFtdWxldDIiLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/236c01fe8a/HeistAmulet2.png",
+                                          "contentType":  "image/png",
+                                          "httpStatus":  200,
+                                          "byteLength":  6129,
+                                          "width":  47,
+                                          "height":  47,
+                                          "sha256":  "b198ee4fcdc60b24880338f1e9de221455a8b7d3427482270b71e62a7a6e5f46"
+                                      },
+                  "Portent Amulet":  {
+                                         "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvUG9ydGVudEFtdWxldCIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/a24206a3df/PortentAmulet.png",
+                                         "contentType":  "image/png",
+                                         "httpStatus":  200,
+                                         "byteLength":  5431,
+                                         "width":  47,
+                                         "height":  47,
+                                         "sha256":  "6b89bcc09f5b6286e235f6f48b67a820483fc15b9e1d5e21593573c34049eae7"
+                                     },
+                  "Solar Amulet":  {
+                                       "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvU29sYXJBbXVsZXQiLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/f23b75f540/SolarAmulet.png",
+                                       "contentType":  "image/png",
+                                       "httpStatus":  200,
+                                       "byteLength":  5741,
+                                       "width":  47,
+                                       "height":  47,
+                                       "sha256":  "31fff6ea76a6d2a7d672a3815ebd9908cfb64dc3e02d83601cc0f2060802460e"
+                                   },
+                  "Stellar Amulet":  {
+                                         "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvU3RlbGxhckFtdWxldCIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/a44db4cd4a/StellarAmulet.png",
+                                         "contentType":  "image/png",
+                                         "httpStatus":  200,
+                                         "byteLength":  5365,
+                                         "width":  47,
+                                         "height":  47,
+                                         "sha256":  "2345e60c35fe521f49025032209ad7cecc3e73c8620ffd145c7bd6288f278726"
+                                     },
+                  "Tenebrous Amulet":  {
+                                           "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9IZWlzdEFtdWxldDIiLCJ3IjoxLCJoIjoxLCJzY2FsZSI6MSwicmVhbG0iOiJwb2UyIn1d/236c01fe8a/HeistAmulet2.png",
+                                           "contentType":  "image/png",
+                                           "httpStatus":  200,
+                                           "byteLength":  6129,
+                                           "width":  47,
+                                           "height":  47,
+                                           "sha256":  "b198ee4fcdc60b24880338f1e9de221455a8b7d3427482270b71e62a7a6e5f46"
+                                       },
+                  "Twisted Amulet":  {
+                                         "url":  "https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQW11bGV0cy9CYXNldHlwZXMvVHdpc3RlZEFtdWxldCIsInciOjEsImgiOjEsInNjYWxlIjoxLCJyZWFsbSI6InBvZTIifV0/19aaf324a3/TwistedAmulet.png",
+                                         "contentType":  "image/png",
+                                         "httpStatus":  200,
+                                         "byteLength":  3530,
+                                         "width":  47,
+                                         "height":  47,
+                                         "sha256":  "8503bd0fa24f0ae2007e34d944d21a6e1402d1239b9e9c4a59f263114faa1dc6"
+                                     }
+              },
+    "missing":  {
+                    "Abyssal Signet":  "No unique official icon URL in pinned upstream item records",
+                    "Ring":  "No unique official icon URL in pinned upstream item records",
+                    "Two-Stone Ring":  "No unique official icon URL in pinned upstream item records",
+                    "Runemastered Veridical Chain":  "No unique official icon URL in pinned upstream item records",
+                    "Veridical Chain":  "No unique official icon URL in pinned upstream item records"
+                }
+}

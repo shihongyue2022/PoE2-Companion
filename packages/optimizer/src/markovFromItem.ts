@@ -325,8 +325,8 @@ export const BONE_KEYS = ['desecrate', 'desecrate_ancient'] as const;
 /**
  * Whether a Desecration is in this craft's model, and why (`MarkovResult.bones`): `required` for a
  * desecrated target or a carved mod already on the item, `optional` when only a priced bone puts it
- * there, absent when neither does or the player excluded bones. Known before solving, so a caller can
- * plan around it (markovBoneFree.ts).
+ * there, absent when neither does or the player excluded bones and no held modifier is flagged.
+ * Known before solving, so a caller can plan around it (markovBoneFree.ts).
  *
  * A desecrated target to craft, a flagged mod on the item to clear — or simply a bone on the price
  * sheet. A bone OFFERS three modifiers and you keep one, so it can be the cheapest way to add an
@@ -351,15 +351,18 @@ export function boneRole(
   data: PatchData, rawPrices: Prices, start: ItemState, targets: readonly TierTarget[], policy?: CurrencyPolicy,
 ): MarkovResult['bones'] {
   const prices = pricesForBase(rawPrices, start.base);
-  // None of it matters if the player has excluded the currency: with no Desecration in the action space
-  // nothing can ever set the flag, so enumerating the axis is pure cost. Checked here rather than left
-  // to `allowsAction`, which prunes ACTIONS and cannot shrink the lattice.
+  // A flag ALREADY on the held item remains real even when the player excludes new bones. Dropping
+  // its axis would omit classifyStart's flagged state from the lattice and falsely report the craft
+  // unreachable. Ordinary removals can clear that flag; action policy still excludes all new bones.
+  const heldFlag = [...start.prefixes, ...start.suffixes]
+    .some((p) => p.desecrated === true || data.mods.get(p.modId)?.source === 'desecrated');
+  if (heldFlag) return 'required';
+  // With no existing flag and no allowed bone, nothing can set one, so the axis is pure cost.
   const allowed = BONE_KEYS.some((k) => !policy?.excluded.has(k));
   const priced = BONE_KEYS.some((k) => prices.currency[k] !== undefined && !policy?.excluded.has(k));
-  // A mod a bone placed is on the held item exactly when `classifyStart` will flag one — read off the
-  // item itself. A merged slot shares one source, so the targets as named answer for the merged list.
-  const needs = targets.some((t) => data.mods.get(t.modId)?.source === 'desecrated')
-    || [...start.prefixes, ...start.suffixes].some((p) => p.desecrated === true || data.mods.get(p.modId)?.source === 'desecrated');
+  // No held flag remains here. A desired carved target requires a bone action; ordinary targets
+  // merely make a priced bone optional. Merged candidates share a source, so named targets suffice.
+  const needs = targets.some((t) => data.mods.get(t.modId)?.source === 'desecrated');
   if (!allowed || !(needs || priced)) return undefined;
   return needs ? 'required' : 'optional';
 }

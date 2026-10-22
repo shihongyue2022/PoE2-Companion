@@ -147,13 +147,13 @@ describe('index.html says what the page is without JavaScript', () => {
   const visibleText = texts.join(' ').replace(/\s+/g, ' ').trim();
 
   it('serves real text in the body, not an empty root div', () => {
-    expect(visibleText.length).toBeGreaterThan(300);
+    expect(visibleText.length).toBeGreaterThan(40);
   });
 
   it('names the product and what it does', () => {
-    expect(visibleText).toMatch(/POE2HTC/);
-    expect(visibleText).toMatch(/Path of Exile 2/);
-    expect(visibleText).toMatch(/craft/i);
+    expect(visibleText).toContain('PoE2 制作工坊');
+    expect(visibleText).toContain('本地制作引擎');
+    expect(visibleText).toContain('词缀数据');
   });
 
   // The fallback has to live inside the container React renders into, because that is what makes it
@@ -191,7 +191,7 @@ describe('no throwaway probes in the suite', () => {
  */
 function describePrStep(wf: string): void {
   describe.skipIf(process.platform === 'win32')('the PR step, executed against coloured vitest output', () => {
-    const lines = wf.split('\n');
+    const lines = wf.replace(/\r\n/g, '\n').split('\n');
     const runAt = lines.findIndex((l, i) => i > lines.findIndex((m) => m.trim() === 'id: pr') && /^\s+run: \|$/.test(l));
     const indent = lines[runAt]!.search(/\S/);
     const end = lines.findIndex((l, i) => i > runAt && l.trim() !== '' && l.search(/\S/) <= indent);
@@ -273,7 +273,7 @@ function describePrStep(wf: string): void {
  * Three ways it went quiet before 2026-09-08, each fixed and each pinned here.
  */
 describe('the price refresh bot cannot merge quietly', () => {
-  const wf = readFileSync('.github/workflows/refresh-prices.yml', 'utf8');
+  const wf = readFileSync('.github/workflows/refresh-prices.yml', 'utf8').replace(/\r\n/g, '\n');
 
   /**
    * It ran `priceResolution` and `costConsistency` only. Those are the sheet's own contract and they
@@ -359,7 +359,7 @@ describe('early-league prices are held for a read', () => {
  * own: a run where only the sheet's date moved opens nothing, and a streamer gone missing holds the PR.
  */
 describe('the streamer refresh bot cannot merge quietly either', () => {
-  const wf = readFileSync('.github/workflows/refresh-streamers.yml', 'utf8');
+  const wf = readFileSync('.github/workflows/refresh-streamers.yml', 'utf8').replace(/\r\n/g, '\n');
 
   it('runs weekly, with only the permissions its one job needs', () => {
     expect(wf).toMatch(/cron: '30 6 \* \* 1'/);

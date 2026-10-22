@@ -1,5 +1,9 @@
 # POE2 How To Craft
 
+> **本地个人改版：PoE2 制作工坊**
+>
+> 双击 `start-workbench.cmd` 启动中文戒指／项链工作台。使用说明、当前功能与数据版本边界请先阅读 [WORKBENCH.md](WORKBENCH.md)。下面保留原项目说明以记录上游来源；其中线上服务与长期功能不代表本地版本全部支持。
+
 <div align="center">
 
 ![CI](https://github.com/Dboire9/POE2_HTC/actions/workflows/ci.yml/badge.svg)
