@@ -142,12 +142,13 @@ namespace PoE2WorkbenchHotkeys {
             origin = baseUrl.TrimEnd('/');
             launcherPath = startupScript;
             window = new HotkeyWindow();
-            uint modifiers = 0x0001 | 0x0002 | 0x4000; // Alt + Ctrl + no repeat
-            bool priceKey = Native.RegisterHotKey(window.Handle, 1, modifiers, (uint)Keys.D);
-            bool checkpointKey = Native.RegisterHotKey(window.Handle, 2, modifiers, (uint)Keys.G);
+            uint priceModifiers = 0x0001 | 0x4000; // Alt + no repeat
+            uint checkpointModifiers = 0x0001 | 0x0002 | 0x4000; // Alt + Ctrl + no repeat
+            bool priceKey = Native.RegisterHotKey(window.Handle, 1, priceModifiers, (uint)Keys.E);
+            bool checkpointKey = Native.RegisterHotKey(window.Handle, 2, checkpointModifiers, (uint)Keys.G);
             if (!priceKey || !checkpointKey) {
                 window.Dispose();
-                throw new InvalidOperationException("Ctrl+Alt+D 或 Ctrl+Alt+G 已被其他程序占用。请关闭冲突程序后重新启动。");
+                throw new InvalidOperationException("Alt+E 或 Ctrl+Alt+G 已被其他程序占用。请关闭冲突程序后重新启动。");
             }
             panel = new StatusPanel();
             panel.OpenWorkbench.Click += delegate { OpenWorkbench(); };
@@ -155,15 +156,15 @@ namespace PoE2WorkbenchHotkeys {
             ContextMenuStrip menu = new ContextMenuStrip();
             menu.Items.Add("打开做装工坊", null, delegate { OpenWorkbench(); });
             menu.Items.Add("显示快捷键说明", null, delegate {
-                panel.Display("游戏内快捷键", "鼠标指向装备：\r\nCtrl+Alt+D：高级复制装备并查价\r\nCtrl+Alt+G：高级复制并核对当前制作锚点\r\n\r\n请先启动并打开本地工坊。Esc 收起面板。\r\n网页负责计算；本助手只发送一次 Ctrl+Alt+C 高级复制。", itemSummary);
+                panel.Display("游戏内快捷键", "鼠标指向装备：\r\nAlt+E：高级复制装备并查价\r\nCtrl+Alt+G：高级复制并核对当前制作锚点\r\n\r\n请先启动并打开本地工坊。Esc 收起面板。\r\n网页负责计算；本助手只发送一次 Ctrl+Alt+C 高级复制。", itemSummary);
             });
             menu.Items.Add("退出快捷键助手", null, delegate { ExitThread(); });
-            tray = new NotifyIcon { Icon = SystemIcons.Information, Text = "PoE2 工坊 · Ctrl+Alt+D 查价 · Ctrl+Alt+G 核对", ContextMenuStrip = menu, Visible = true };
+            tray = new NotifyIcon { Icon = SystemIcons.Information, Text = "PoE2 工坊 · Alt+E 查价 · Ctrl+Alt+G 核对", ContextMenuStrip = menu, Visible = true };
             tray.DoubleClick += delegate { OpenWorkbench(); };
             window.Pressed += BeginCapture;
             timer = new System.Windows.Forms.Timer { Interval = 100 };
             timer.Tick += Tick; timer.Start();
-            tray.ShowBalloonTip(4000, "PoE2 快捷键助手已启动", "游戏内指向装备：Ctrl+Alt+D 查价，Ctrl+Alt+G 核对制作锚点。右键托盘图标可退出。", ToolTipIcon.Info);
+            tray.ShowBalloonTip(4000, "PoE2 快捷键助手已启动", "游戏内指向装备：Alt+E 查价，Ctrl+Alt+G 核对制作锚点。右键托盘图标可退出。", ToolTipIcon.Info);
         }
 
         private void BeginCapture(int hotkey) {
