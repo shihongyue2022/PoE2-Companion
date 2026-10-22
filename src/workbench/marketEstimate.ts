@@ -1,5 +1,8 @@
 import type { FlexibleTradeDocument } from './tradeSearch';
 import { localizeEquipmentName, localizeEquipmentStat } from './genericEquipment';
+import tradeItems from './data/trade-item-index.json';
+
+const COMMODITY_TYPES = new Set(tradeItems.items.filter((item) => item.group === 'currency' && !('base' in item)).map((item) => item.en));
 
 export interface EstimatePriceGroup {
   readonly currency: string;
@@ -20,6 +23,15 @@ export interface EstimateListing {
   readonly indexedAt?: string;
   readonly properties?: readonly string[];
   readonly explicitMods?: readonly string[];
+  readonly implicitMods?: readonly string[];
+  readonly enchantMods?: readonly string[];
+  readonly runeMods?: readonly string[];
+  readonly fracturedMods?: readonly string[];
+  readonly desecratedMods?: readonly string[];
+  readonly itemLevel?: number;
+  readonly rarity?: 'normal' | 'magic' | 'rare' | 'unique';
+  readonly corrupted?: boolean;
+  readonly identified?: boolean;
 }
 
 export interface EstimateContext {
@@ -76,7 +88,7 @@ interface ListingPrice {
   row: Record<string, unknown>;
 }
 
-function listingPrices(listings: readonly unknown[]): ListingPrice[] {
+function listingPrices(listings: readonly unknown[], ordered = false): ListingPrice[] {
   const prices: ListingPrice[] = [];
   for (const row of listings) {
     if (!isObject(row) || row.gone || !isObject(row.listing) || !isObject(row.listing.price)) continue;
@@ -88,14 +100,15 @@ function listingPrices(listings: readonly unknown[]): ListingPrice[] {
       ? listing.account.name.trim().toLowerCase() : '';
     prices.push({ amount, currency, seller, row });
   }
-  return prices.sort((a, b) => a.currency.localeCompare(b.currency) || a.amount - b.amount);
+  return ordered ? prices : prices.sort((a, b) => a.currency.localeCompare(b.currency) || a.amount - b.amount);
 }
 
 /** A compact selection from the same de-duplicated offers as the currency summary. */
-export function representativeListings(listings: readonly unknown[]): EstimateListing[] {
+export function representativeListings(listings: readonly unknown[], ranked = false): EstimateListing[] {
   const sellers = new Set<string>();
   const groups = new Map<string, EstimateListing[]>();
-  for (const { amount, currency, seller, row } of listingPrices(listings)) {
+  const ordered: EstimateListing[] = [];
+  for (const { amount, currency, seller, row } of listingPrices(listings, ranked)) {
     const key = seller ? `${currency}:${seller}` : '';
     if (key && sellers.has(key)) continue;
     if (key) sellers.add(key);
@@ -114,12 +127,23 @@ export function representativeListings(listings: readonly unknown[]): EstimateLi
     const explicitMods = Array.isArray(item.explicitMods)
       ? item.explicitMods.slice(0, 8).map((mod) => publicText(mod, 220)).filter(Boolean) : [];
     const indexed = isObject(row.listing) && typeof row.listing.indexed === 'string' ? Date.parse(row.listing.indexed) : NaN;
+    const extraMods = Object.fromEntries(['implicitMods', 'enchantMods', 'runeMods', 'fracturedMods', 'desecratedMods'].flatMap((key) => {
+      const lines = item[key];
+      return Array.isArray(lines) ? [[key, lines.slice(0, 16).map((line) => publicText(line, 220)).filter(Boolean)]] : [];
+    }));
+    const rarity = typeof item.frameType === 'number' ? (['normal', 'magic', 'rare', 'unique'] as const)[item.frameType] : undefined;
     const sample: EstimateListing = { id: row.id, base, name, price: { amount, currency },
+      ...extraMods, ...(rarity ? { rarity } : {}),
+      ...(typeof item.ilvl === 'number' ? { itemLevel: item.ilvl } : {}),
+      ...(typeof item.corrupted === 'boolean' ? { corrupted: item.corrupted } : {}),
+      ...(typeof item.identified === 'boolean' ? { identified: item.identified } : {}),
       ...(Number.isFinite(indexed) ? { indexedAt: new Date(indexed).toISOString() } : {}),
       ...(properties.length ? { properties } : {}), ...(explicitMods.length ? { explicitMods } : {}) };
+    ordered.push(sample);
     const group = groups.get(currency) ?? [];
     group.push(sample); groups.set(currency, group);
   }
+  if (ranked) return ordered.slice(0, 20);
   // Show each currency first, then its middle offer where space permits; never imply currency conversion.
   const all = [...groups.values()];
   return [...all.map((group) => group[0]!), ...all.filter((group) => group.length > 1).map((group) => group[Math.floor(group.length / 2)]!)].slice(0, 8);
@@ -135,10 +159,15 @@ const CATEGORY_NAMES: Readonly<Record<string, string>> = {
   'weapon.twosword': '双手剑', 'weapon.oneaxe': '单手斧', 'weapon.twoaxe': '双手斧', 'weapon.flail': '链锤',
   'weapon.talisman': '魔符', 'weapon.rod': '钓竿', jewel: '珠宝', flask: '药剂',
   'flask.life': '生命药剂', 'flask.mana': '魔力药剂', 'flask.charm': '护符', 'sanctum.relic': '古物',
+  map: '终局物品', 'map.waystone': '换界石（地图）', 'map.tablet': '碑牌', 'map.logbook': '探险日志',
+  'map.breachstone': '裂痕石', 'map.barya': '试炼硬币', 'map.ultimatum': '最后通牒', 'map.bosskey': '巅峰钥匙', 'map.fragment': '地图碎片',
+  currency: '通货 / 材料', 'currency.rune': '符文', 'currency.soulcore': '灵魂核心', 'currency.socketable': '镶嵌材料', 'currency.omen': '预兆',
+  gem: '宝石', 'gem.activegem': '技能宝石', 'gem.supportgem': '辅助宝石', 'gem.metagem': '持续型宝石',
 };
 const PROPERTY_NAMES: Readonly<Record<string, string>> = {
   dps: '总 DPS', pdps: '物理 DPS', edps: '元素 DPS', ar: '护甲', ev: '闪避', es: '能量护盾',
   aps: '每秒攻击次数', crit: '暴击率', block: '格挡', spirit: '精魂', ward: '结界', ilvl: '物品等级', quality: '品质',
+  map_tier: '地图阶级', gem_level: '宝石等级', area_level: '区域等级', stack_size: '堆叠数量',
 };
 
 /** Describe the submitted search, including when it cannot support a comparable-item estimate. */
@@ -181,7 +210,7 @@ export function estimateQueryContext(value: unknown): EstimateContext {
       const min = typeof range.min === 'number' && Number.isFinite(range.min) ? range.min : undefined;
       const max = typeof range.max === 'number' && Number.isFinite(range.max) ? range.max : undefined;
       if (min === undefined && max === undefined) continue;
-      if (groupId === 'equipment_filters' && PROPERTY_NAMES[id]) propertyCount++;
+      if (PROPERTY_NAMES[id] && ['equipment_filters', 'map_filters', 'misc_filters', 'type_filters'].includes(groupId) && !['ilvl', 'stack_size'].includes(id)) propertyCount++;
       if (PROPERTY_NAMES[id]) properties.add(`${PROPERTY_NAMES[id]} ${min === undefined ? '不限' : min}–${max === undefined ? '不限' : max}`);
     }
   }
@@ -195,7 +224,8 @@ export function estimateQueryContext(value: unknown): EstimateContext {
       if (isObject(misc[id]) && ['true', 'false'].includes(String(misc[id].option))) summary.push(`${misc[id].option === 'true' ? '已' : '未'}${label}`);
     }
   }
-  return { category, statCount, propertyCount, sufficient: statCount + propertyCount >= 2, summary: summary.filter(Boolean) };
+  const exactCommodity = category.startsWith('currency') && COMMODITY_TYPES.has(base);
+  return { category, statCount, propertyCount, sufficient: exactCommodity || statCount + propertyCount >= 2, summary: summary.filter(Boolean) };
 }
 
 export function estimateConfidence(context: EstimateContext, groups: readonly EstimatePriceGroup[]): EstimateConfidence {

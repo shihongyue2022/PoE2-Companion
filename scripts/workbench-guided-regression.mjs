@@ -19,8 +19,8 @@ await mkdir('artifacts/workbench', { recursive: true });
 try {
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   await page.locator('.wb-pool-row').first().waitFor();
-  await page.getByRole('button', { name: '粘贴游戏装备' }).click();
-  await page.getByLabel('游戏装备文本').fill(raw);
+  await page.getByRole('button', { name: '粘贴游戏物品' }).click();
+  await page.getByLabel('游戏物品文本').fill(raw);
   await page.getByRole('button', { name: '识别并导入' }).click();
   const advisor = page.getByRole('region', { name: '底材与做装建议' });
   assert.match(await advisor.innerText(), /至少需要物等 82/);

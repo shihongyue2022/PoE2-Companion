@@ -1,4 +1,5 @@
 import { equipmentMetricDetails, parseEquipment, type Equipment } from './genericEquipment';
+import { projectCharacterResistances, validCharacterPanel, type CharacterPanelSnapshot } from './characterPanel';
 
 export const LOADOUT_STORAGE_KEY = 'poe2-workbench-loadout-v1';
 
@@ -53,6 +54,7 @@ export interface LoadoutState {
   version: 1;
   slots: Partial<Record<LoadoutSlot, string>>;
   goals: LoadoutGoals;
+  character?: CharacterPanelSnapshot;
 }
 export function emptyLoadout(): LoadoutState {
   return { version: 1, slots: {}, goals: { priorities: [...DEFAULT_PRIORITIES], minimums: {} } };
@@ -147,6 +149,7 @@ export interface ResistanceTarget {
 }
 export type ComparisonStatus = 'upgrade' | 'downgrade' | 'tradeoff' | 'equal' | 'insufficient';
 export interface EquipmentComparison {
+  characterResistances: ReturnType<typeof projectCharacterResistances>;
   status: ComparisonStatus;
   title: string;
   reason: string;
@@ -171,7 +174,11 @@ export function compareCandidate(state: LoadoutState, slot: LoadoutSlot, candida
     delta: round((newDetails.values[metric.key] ?? 0) - (oldDetails.values[metric.key] ?? 0)),
     priority: state.goals.priorities.includes(metric.key),
   })).filter((metric) => metric.before !== 0 || metric.after !== 0 || metric.priority);
-  const changed = metrics.filter((metric) => metric.delta !== 0);
+  const characterResistances = projectCharacterResistances(state, slot, candidate);
+  const changed = metrics.map((metric) => {
+    const projected = characterResistances.find((resistance) => resistance.key === metric.key);
+    return projected ? { ...metric, delta: projected.effectiveDelta } : metric;
+  }).filter((metric) => metric.delta !== 0);
   const priorityChanges = changed.filter((metric) => metric.priority);
   const positive = changed.some((metric) => metric.delta > 0);
   const negative = changed.some((metric) => metric.delta < 0);
@@ -181,6 +188,8 @@ export function compareCandidate(state: LoadoutState, slot: LoadoutSlot, candida
     : priorityPositive && priorityNegative ? '优先属性互有升降' : priorityPositive ? '优先属性提升'
       : priorityNegative ? '优先属性下降' : '优先属性持平';
   const warnings: string[] = [];
+  if (characterResistances.length) warnings.push('角色抗性按已录入的未封顶总值与装备差值估算，其他天赋、技能及条件保持不变；生命和防御仍只比较装备贡献。');
+  if (state.character && !validCharacterPanel(state)) warnings.push('装备已变化，游戏面板基准已失效，请重新录入当前面板后再判断有效抗性。');
   if (conflict) warnings.push(conflict);
   if (!current) warnings.push('当前栏位为空，没有旧装备可比较。');
   if (!candidate.identified || (current && !current.identified)) warnings.push('含未鉴定装备，未知词缀不能按零属性比较。');
@@ -188,13 +197,14 @@ export function compareCandidate(state: LoadoutState, slot: LoadoutSlot, candida
   if (changedEffects) warnings.push('未计入加总的词缀发生变化，技能、条件效果与流派收益需要单独核对。');
   const parserWarnings = [...(current?.warnings ?? []), ...candidate.warnings];
   warnings.push(...new Set(parserWarnings));
-  const insufficient = !current || !candidate.identified || !current.identified || !!conflict || changedEffects || parserWarnings.length > 0;
+  const insufficient = !current || !candidate.identified || !current.identified || !!conflict || changedEffects || parserWarnings.length > 0
+    || !!state.character && !validCharacterPanel(state);
   let status: ComparisonStatus = insufficient ? 'insufficient' : positive && negative ? 'tradeoff' : positive ? 'upgrade' : negative ? 'downgrade' : 'equal';
   const beforeTotals = loadoutTotals(state);
   const targets = RESISTANCE_KEYS.flatMap((key): ResistanceTarget[] => {
     const minimum = state.goals.minimums[key];
     if (minimum === undefined) return [];
-    const before = beforeTotals[key] ?? 0;
+    const before = characterResistances.find((resistance) => resistance.key === key)?.before ?? beforeTotals[key] ?? 0;
     const after = round(before - (oldDetails.values[key] ?? 0) + (newDetails.values[key] ?? 0));
     return [{ key, label: METRICS.find((metric) => metric.key === key)!.label, minimum, before, after, met: after >= minimum }];
   });
@@ -209,12 +219,18 @@ export function compareCandidate(state: LoadoutState, slot: LoadoutSlot, candida
     equal: '本次能够加总的纸面属性没有变化；这不代表两件装备的实战表现相同。',
     insufficient: '下方仍显示能够读到的差值；补齐或核对提示后，再判断这件装备是否适合角色。',
   };
-  return { status, title: titles[status], reason: reasons[status], priorityDirection, metrics,
+  if (characterResistances.length && status !== 'insufficient') {
+    reasons[status] = status === 'equal'
+      ? '已比较的装备贡献与封顶后的有效抗性未发生收益变化；抗性溢出的变化仍在下方列出。'
+      : '按非抗性装备贡献与封顶后的有效抗性判断，溢出抗性不重复视为当前收益；生命与防御差值不代表角色最终变化。';
+  }
+  return { status, title: titles[status], reason: reasons[status], priorityDirection, metrics, characterResistances,
     uncountedBefore: oldDetails.uncounted, uncountedAfter: newDetails.uncounted, targets, warnings, canEquip: !conflict };
 }
 
 export function serializeLoadout(state: LoadoutState): string { return JSON.stringify(state, null, 2); }
 export function deserializeLoadout(text: string): { state: LoadoutState | null; error: string } {
+  const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
   if (text.length > 1_500_000) return { state: null, error: '装备方案文件过大。' };
   let value: unknown;
   try { value = JSON.parse(text); } catch { return { state: null, error: '不是有效的 JSON 装备方案。' }; }
@@ -242,6 +258,25 @@ export function deserializeLoadout(text: string): { state: LoadoutState | null; 
         if (typeof minimum === 'number' && Number.isFinite(minimum) && minimum >= -200 && minimum <= 1000) state.goals.minimums[key] = minimum;
       }
     }
+  }
+  if (data.character !== undefined) {
+    const panel = data.character;
+    if (!record(panel) || typeof panel.equipmentSignature !== 'string' || panel.equipmentSignature.length > 1_000_000
+      || typeof panel.recordedAt !== 'string' || !record(panel.values) || !record(panel.caps)) {
+      return { state: null, error: '角色面板基准无效。' };
+    }
+    const values: CharacterPanelSnapshot['values'] = {}, caps: CharacterPanelSnapshot['caps'] = {}, itemValues: CharacterPanelSnapshot['values'] = {};
+    for (const metric of METRICS) {
+      const value = panel.values[metric.key];
+      if (typeof value === 'number' && Number.isFinite(value) && value >= -200 && value <= 1e9) values[metric.key] = value;
+      const itemValue = record(panel.itemValues) ? panel.itemValues[metric.key] : undefined;
+      if (typeof itemValue === 'number' && Number.isFinite(itemValue) && itemValue >= 0 && itemValue <= 1e9) itemValues[metric.key] = itemValue;
+    }
+    for (const key of RESISTANCE_KEYS) {
+      const cap = panel.caps[key];
+      if (typeof cap === 'number' && Number.isFinite(cap) && cap >= 0 && cap <= 100) caps[key] = cap;
+    }
+    state.character = { values, caps, itemValues, equipmentSignature: panel.equipmentSignature, recordedAt: panel.recordedAt };
   }
   return { state, error: '' };
 }

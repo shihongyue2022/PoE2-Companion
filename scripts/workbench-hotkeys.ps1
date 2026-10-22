@@ -131,11 +131,12 @@ namespace PoE2WorkbenchHotkeys {
         private readonly NotifyIcon tray;
         private readonly System.Windows.Forms.Timer timer;
         private readonly JavaScriptSerializer json = new JavaScriptSerializer();
-        private LocalClient postClient, pollClient;
+        private LocalClient postClient, pollClient, viewClient;
+        private Process launcher;
         private int generation, capturePhase;
-        private string mode = "trade", resultId, resultUrl, itemSummary = "";
+        private string mode = "trade", resultId, resultUrl, itemSummary = "", capturedRaw = "";
         private uint clipboardSequence;
-        private DateTime captureDeadline, postDeadline, pollDeadline, nextPoll, resultDeadline;
+        private DateTime captureDeadline, postDeadline, pollDeadline, nextPoll, resultDeadline, launchDeadline, viewDeadline;
         private bool escapeWasDown, disposed;
 
         internal CompanionContext(string baseUrl, string startupScript) {
@@ -147,8 +148,11 @@ namespace PoE2WorkbenchHotkeys {
             bool priceKey = Native.RegisterHotKey(window.Handle, 1, priceModifiers, (uint)Keys.E);
             bool checkpointKey = Native.RegisterHotKey(window.Handle, 2, checkpointModifiers, (uint)Keys.G);
             if (!priceKey || !checkpointKey) {
+                if (priceKey) Native.UnregisterHotKey(window.Handle, 1);
+                if (checkpointKey) Native.UnregisterHotKey(window.Handle, 2);
                 window.Dispose();
-                throw new InvalidOperationException("Alt+E 或 Ctrl+Alt+G 已被其他程序占用。请关闭冲突程序后重新启动。");
+                string keys = (!priceKey ? "Alt+E" : "") + (!priceKey && !checkpointKey ? "、" : "") + (!checkpointKey ? "Ctrl+Alt+G" : "");
+                throw new InvalidOperationException(keys + " 已被其他程序占用。\r\nPoE Overlay II 默认也使用 Alt+E 查价；若同时运行，请在它的快捷键设置里修改 Evaluate 的按键，或退出其中一个查价助手，再重启本助手。");
             }
             panel = new StatusPanel();
             panel.OpenWorkbench.Click += delegate { OpenWorkbench(); };
@@ -171,6 +175,8 @@ namespace PoE2WorkbenchHotkeys {
             if (!Native.GameIsForeground()) return;
             generation++;
             CancelRequests();
+            if (launcher != null) { launcher.Dispose(); launcher = null; }
+            capturedRaw = "";
             resultId = null; resultUrl = null; itemSummary = ""; panel.OpenResult.Enabled = false;
             mode = hotkey == 2 ? "checkpoint" : "trade";
             capturePhase = 1; captureDeadline = DateTime.UtcNow.AddSeconds(3);
@@ -179,6 +185,20 @@ namespace PoE2WorkbenchHotkeys {
 
         private void Tick(object sender, EventArgs args) {
             DateTime now = DateTime.UtcNow;
+            if (launcher != null) {
+                if (launcher.HasExited) {
+                    int exitCode = launcher.ExitCode; launcher.Dispose(); launcher = null;
+                    if (exitCode == 0) OpenCapturedItem();
+                    else DisplayError("工坊启动失败，请运行 start-workbench.cmd 检查后重试。");
+                } else if (now > launchDeadline) {
+                    launcher.Dispose(); launcher = null;
+                    DisplayError("等待工坊启动超时。已保留本次装备，请稍后重新点击“在工坊查看”。");
+                }
+            }
+            if (viewClient != null && now > viewDeadline) {
+                viewClient.CancelAsync(); viewClient.Dispose(); viewClient = null;
+                DisplayError("打开装备页面超时。已保留本次装备，请重新点击“在工坊查看”。");
+            }
             bool escapeDown = Native.Down((int)Keys.Escape);
             if (escapeDown && !escapeWasDown && panel.Visible) panel.Hide();
             escapeWasDown = escapeDown;
@@ -217,8 +237,9 @@ namespace PoE2WorkbenchHotkeys {
 
         private void Submit(string raw) {
             if (!Program.IsEquipmentText(raw)) {
-                DisplayError("未读到带有稀有度和物品等级的装备文字。请指向装备后重试；支持英文、繁体和简体。"); return;
+                DisplayError("未读到完整物品文字。请指向物品后重试；支持装备、地图、宝石、通货及材料，不要求必须带物品等级。"); return;
             }
+            capturedRaw = raw;
             string[] lines = raw.Replace("\r", "").Split('\n');
             List<string> names = new List<string>();
             for (int index = 0; index < Math.Min(lines.Length, 7); index++) {
@@ -278,15 +299,42 @@ namespace PoE2WorkbenchHotkeys {
         }
         private bool SafeUrl(string url) { return Program.IsAllowedResultUrl(origin, url); }
         private void OpenWorkbench() {
-            if (!File.Exists(launcherPath)) { OpenUrl(origin + "/?companion=1"); return; }
+            if (launcher != null || viewClient != null) return;
+            if (capturePhase != 0) { panel.Display("正在读取装备…", "请等装备复制完成后，再点击“在工坊查看”。", itemSummary); return; }
+            if (!File.Exists(launcherPath)) { OpenCapturedItem(); return; }
             try {
                 ProcessStartInfo launch = new ProcessStartInfo("powershell.exe",
-                    "-NoProfile -ExecutionPolicy Bypass -File \"" + launcherPath + "\" -NoHotkeys -BaseUrl \"" + origin + "\"") {
+                    "-NoProfile -ExecutionPolicy Bypass -File \"" + launcherPath + "\" -NoHotkeys -NoBrowser -BaseUrl \"" + origin + "\"") {
                     UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden
                 };
-                using (Process started = Process.Start(launch)) { }
-                panel.Display("正在连接工坊", "正在检查并启动后台服务，网页会在就绪后打开。请保留网页，然后重新使用快捷键。", itemSummary);
+                launcher = Process.Start(launch); launchDeadline = DateTime.UtcNow.AddSeconds(40);
+                panel.Display("正在连接工坊", "正在检查并启动后台服务，就绪后会自动打开本次装备的页面，无需重新复制。", itemSummary);
             } catch { DisplayError("无法启动工坊，请手动运行 start-workbench.cmd。"); }
+        }
+        private void OpenCapturedItem() {
+            if (String.IsNullOrEmpty(capturedRaw)) { OpenUrl(origin + "/?companion=1"); return; }
+            // Retain the captured item across connection failures. A view is not a
+            // new live task, so it cannot replay a completed crafting checkpoint.
+            int requestGeneration = generation;
+            LocalClient client = new LocalClient(); viewClient = client; viewDeadline = DateTime.UtcNow.AddSeconds(6);
+            client.Headers[HttpRequestHeader.ContentType] = "application/json; charset=utf-8";
+            client.UploadStringCompleted += delegate(object sender, UploadStringCompletedEventArgs response) {
+                if (requestGeneration != generation || disposed || !Object.ReferenceEquals(viewClient, client)) { client.Dispose(); return; }
+                viewClient = null; client.Dispose();
+                if (response.Cancelled || response.Error != null) {
+                    DisplayError("无法把本次装备送入工坊。已保留装备，请重新点击“在工坊查看”。"); return;
+                }
+                try {
+                    Dictionary<string, object> payload = json.Deserialize<Dictionary<string, object>>(response.Result);
+                    string id = Text(payload, "id");
+                    if (!Object.Equals(payload["ok"], true) || String.IsNullOrEmpty(id)) throw new Exception();
+                    resultId = null;
+                    OpenUrl(origin + "/?companion=1&equipment=" + Uri.EscapeDataString(id));
+                    panel.Display("已在工坊打开该装备", "浏览器已打开本次装备的页面，可以调整查价条件、查看估价并搜索官方挂单。", itemSummary);
+                } catch { DisplayError("工坊返回的装备链接无效，请重试。"); }
+            };
+            try { client.UploadStringAsync(new Uri(origin + "/api/workbench/companion-view"), "POST", json.Serialize(new { raw = capturedRaw, mode = mode })); }
+            catch { viewClient = null; client.Dispose(); DisplayError("无法打开装备页面，请重新点击“在工坊查看”。"); }
         }
         private void OpenUrl(string url) {
             if (!SafeUrl(url)) return;
@@ -297,9 +345,11 @@ namespace PoE2WorkbenchHotkeys {
         private void CancelRequests() {
             if (postClient != null) { postClient.CancelAsync(); postClient.Dispose(); postClient = null; }
             if (pollClient != null) { pollClient.CancelAsync(); pollClient.Dispose(); pollClient = null; }
+            if (viewClient != null) { viewClient.CancelAsync(); viewClient.Dispose(); viewClient = null; }
         }
         protected override void ExitThreadCore() {
             disposed = true; timer.Stop(); timer.Dispose(); CancelRequests();
+            if (launcher != null) { launcher.Dispose(); launcher = null; }
             tray.Visible = false; tray.Dispose(); window.Dispose(); panel.Dispose();
             base.ExitThreadCore();
         }
@@ -313,7 +363,8 @@ namespace PoE2WorkbenchHotkeys {
         public static bool IsEquipmentText(string raw) {
             return !String.IsNullOrEmpty(raw) && Encoding.UTF8.GetByteCount(raw) <= 60000 &&
                 Regex.IsMatch(raw, @"(?im)^\s*(Rarity|稀有度)\s*[:：]") &&
-                Regex.IsMatch(raw, @"(?im)^\s*(Item Level|物品等級|物品等级)\s*[:：]\s*\d{1,3}\s*$");
+                Regex.IsMatch(raw, @"(?m)^\s*-{3,}\s*$") &&
+                Regex.IsMatch(raw, @"(?im)^\s*(Rarity|稀有度)\s*[:：][^\r\n]+\r?\n[^\r\n-]+");
         }
         public static bool IsAllowedResultUrl(string origin, string url) {
             Uri uri;

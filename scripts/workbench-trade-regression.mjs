@@ -24,8 +24,8 @@ async function query() {
 try {
   await page.goto(process.env.WORKBENCH_URL ?? 'http://127.0.0.1:5173', { waitUntil: 'networkidle' });
   await page.locator('.wb-pool-row').first().waitFor();
-  await page.getByRole('button', { name: '粘贴游戏装备' }).click();
-  await page.getByLabel('游戏装备文本').fill(raw);
+  await page.getByRole('button', { name: '粘贴游戏物品' }).click();
+  await page.getByLabel('游戏物品文本').fill(raw);
   await page.getByRole('button', { name: '识别并导入' }).click();
   assert.equal(await page.locator('.wb-current-mods .wb-mod').count(), 6);
   assert.equal(await page.getByLabel('装备底座').inputValue(), 'Breach Ring');

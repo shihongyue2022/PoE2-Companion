@@ -6,6 +6,9 @@ import {
   serializeLoadout, slotLabel, type LoadoutSlot, type LoadoutState, type MetricKey,
 } from './loadout';
 import './loadout.css';
+import CharacterPanelCalibration from './CharacterPanelCalibration';
+import PobImportPanel from './PobImportPanel';
+import { validCharacterPanel } from './characterPanel';
 
 export interface LoadoutPanelProps {
   onPrice: (raw: string, intent?: 'price' | 'upgrade') => void;
@@ -115,23 +118,31 @@ export default function LoadoutPanel({ onPrice, onCraft, league }: LoadoutPanelP
         <p className="lo-footnote">药剂与护符为记录栏，效果不加入常驻属性。可用护符栏位、唯一装备限制、属性需求和特殊天赋请在游戏内核对。</p>
         {warnings.length > 0 && <ul className="lo-warnings">{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
         <div className="lo-summary">
-          <h3>已记录装备 · 纸面属性合计</h3>
+          <h3>装备贡献合计（非角色面板）</h3>
+          <p className="lo-footnote">下列生命、护盾、护甲等属于装备贡献；角色最终面板请在下方录入，不能直接按同一数值比较。</p>
           <div className="lo-total-grid">{METRICS.filter((metric) => !metric.key.endsWith('Dps') && ((totals[metric.key] ?? 0) !== 0 || RESISTANCE_KEYS.some((key) => key === metric.key) || metric.key === 'life')).map((metric) => <div key={metric.key}><span>{metric.label}</span><strong>{format(totals[metric.key] ?? 0)}{metric.unit}</strong></div>)}</div>
           <p className="lo-footnote">只合计可直接读取的数值，不含天赋、技能、剧情抗性惩罚、条件效果和百分比生命/防御缩放；这不是角色面板。武器 DPS 分件比较。</p>
         </div>
+        <CharacterPanelCalibration key={loadout.character?.recordedAt ?? 'unrecorded'} state={loadout} totals={totals} onSave={(character) => {
+          save({ ...loadout, character }); setNotice(character ? '游戏面板已记录。换装时比较有效抗性，生命与防御仍只列出装备差值。' : '已清除游戏面板基准。');
+        }} />
         <details className="lo-goals">
           <summary>设置升级目标 <span>{loadout.goals.priorities.length} 项优先属性</span></summary>
           <p className="lo-footnote">优先属性单独标出，不将生命、抗性或武器 DPS 换算成一个虚构的战力分数。</p>
           <div className="lo-priorities">{METRICS.map((metric) => <label key={metric.key}><input type="checkbox" checked={loadout.goals.priorities.includes(metric.key)} onChange={(event) => setPriority(metric.key, event.target.checked)} />{metric.label}</label>)}</div>
-          <h4>装备合计抗性下限</h4>
+          <h4>{validCharacterPanel(loadout) ? '角色未封顶总抗性下限' : '装备合计抗性下限'}</h4>
           <div className="lo-minimums">{RESISTANCE_KEYS.map((key) => <label key={key}>{METRICS.find((metric) => metric.key === key)!.label}<input aria-label={`${METRICS.find((metric) => metric.key === key)!.label}装备目标`} type="number" min={-200} max={1000} placeholder="不限制" value={loadout.goals.minimums[key] ?? ''} onChange={(event) => {
             const minimums = { ...loadout.goals.minimums };
             if (!event.target.value) delete minimums[key];
             else { const value = Number(event.target.value); if (!Number.isFinite(value) || value < -200 || value > 1000) return; minimums[key] = value; }
             save({ ...loadout, goals: { ...loadout.goals, minimums } });
           }} /></label>)}</div>
-          <p className="lo-footnote">用于检查替换后的装备合计是否达标。请自行加入角色天赋、剧情惩罚等所需的抗性余量。</p>
+          <p className="lo-footnote">已校准时按角色未封顶总抗性判断；未校准时仅按装备合计判断，需自行考虑剧情惩罚、天赋及抗性余量。</p>
         </details>
+        <PobImportPanel onImport={(slots) => {
+          save({ ...loadout, slots, character: undefined }); setError(''); setCandidateText(''); setImportText('');
+          setNotice('已导入所选 PoB2 装备组，原角色面板基准已清除。请核对预览中的未解析效果。');
+        }} />
         <details className="lo-backup">
           <summary>导入 / 导出整套方案</summary>
           <p className="lo-footnote">方案只包含本页装备与目标。导入会替换本页整套记录，不会覆盖工艺台。</p>
@@ -166,6 +177,9 @@ export default function LoadoutPanel({ onPrice, onCraft, league }: LoadoutPanelP
             <div className="lo-comparison-names"><span>当前：{selectedItem?.name ?? '空栏位'}</span><span>候选：{candidate.name}</span></div>
             {comparison.warnings.length > 0 && <ul className="lo-warnings">{comparison.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
             <div className="lo-table-scroll"><table className="lo-deltas"><thead><tr><th>纸面属性</th><th>当前</th><th>候选</th><th>变化</th></tr></thead><tbody>{comparison.metrics.map((metric) => <tr key={metric.key}><th>{metric.label}{metric.priority && <small title="玩家优先属性">优先</small>}</th><td>{format(metric.before)}{metric.unit}</td><td>{format(metric.after)}{metric.unit}</td><td className={metric.delta > 0 ? 'positive' : metric.delta < 0 ? 'negative' : ''}>{deltaText(metric.delta, metric.unit)}</td></tr>)}</tbody></table></div>
+            {comparison.characterResistances.length > 0 && <div className="lo-target-results"><h4>角色有效抗性与溢出（局部估算）</h4>{comparison.characterResistances.map((resistance) => <p key={resistance.key}>
+              {METRICS.find((metric) => metric.key === resistance.key)!.label}：有效 {format(resistance.effectiveBefore)}% → {format(resistance.effectiveAfter)}%；总值 {format(resistance.before)}% → {format(resistance.after)}%；溢出 {format(resistance.overflowBefore)}% → {format(resistance.overflowAfter)}%
+            </p>)}</div>}
             {comparison.targets.length > 0 && <div className="lo-target-results"><h4>替换后的全套抗性目标</h4>{comparison.targets.map((target) => <p key={target.key} className={target.met ? 'positive' : 'negative'}>{target.label} {format(target.before)} → {format(target.after)}% / 目标 {target.minimum}% · {target.met ? '达标' : '未达标'}</p>)}</div>}
             {(comparison.uncountedBefore.length > 0 || comparison.uncountedAfter.length > 0) && <details className="lo-uncounted"><summary>无法加总的效果 · 请逐条核对</summary><div className="lo-effects-columns"><div><h4>当前装备</h4><ul>{comparison.uncountedBefore.length ? comparison.uncountedBefore.map((line, index) => <li key={index}>{line}</li>) : <li>无额外已读取词缀</li>}</ul></div><div><h4>候选装备</h4><ul>{comparison.uncountedAfter.length ? comparison.uncountedAfter.map((line, index) => <li key={index}>{line}</li>) : <li>无额外已读取词缀</li>}</ul></div></div></details>}
             <p className="lo-footnote">武器 DPS 来自物品已显示的伤害范围 × 每秒攻击次数，不是技能或流派 DPS。百分比词缀、条件效果和未识别内容不作为零收益。估值不会参与升级判定。</p>

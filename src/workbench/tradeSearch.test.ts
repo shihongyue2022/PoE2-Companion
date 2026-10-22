@@ -138,7 +138,7 @@ describe('flexible official trade query', () => {
     expect(result.query.query.type).toBe('Stellar Amulet');
     expect(result.query.query.status.option).toBe('securable');
     expect(result.query.query.filters.misc_filters?.filters.ilvl).toEqual({ min: 79, max: 85 });
-    expect(result.query.query.filters.type_filters.filters.rarity.option).toBe('rare');
+    expect(result.query.query.filters.type_filters.filters.rarity?.option).toBe('rare');
     expect(buildFlexibleTrade({ ...search([]), status: 'online' }).query.query.status.option).toBe('online');
   });
 

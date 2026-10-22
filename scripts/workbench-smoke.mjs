@@ -19,7 +19,7 @@ try {
   check('load indexed engine data and Simplified UI');
   await page.screenshot({ path: `${screenshotDir}/desktop.png`, fullPage: true });
 
-  await page.getByRole('button', { name: '粘贴游戏装备' }).click();
+  await page.getByRole('button', { name: '粘贴游戏物品' }).click();
   await page.getByRole('button', { name: '试用戒指示例' }).click();
   assert.equal(await page.locator('.wb-current-mods .wb-mod').count(), 3);
   assert.equal(await page.locator('.wb-targets .wb-mod').count(), 3);
@@ -62,7 +62,7 @@ try {
   check('invalid level validation cannot crash the trade view');
 
   // Restore the known ring and test a nontrivial policy, not only a zero-cost target.
-  await page.getByRole('button', { name: '粘贴游戏装备' }).click();
+  await page.getByRole('button', { name: '粘贴游戏物品' }).click();
   await page.getByRole('button', { name: '试用戒指示例' }).click();
   await nav.getByRole('button', { name: '制作策略' }).click();
   await page.locator('.wb-current-mods select').first().selectOption('3');
@@ -98,9 +98,9 @@ try {
   assert(Math.abs(doubledCost - 2 * baselineCost) <= 2, `${baselineCost} -> ${doubledCost}`);
   check('saved manual material prices reach the actual Worker solver');
 
-  await page.getByRole('button', { name: '粘贴游戏装备' }).click();
-  const text = await page.getByLabel('游戏装备文本').inputValue();
-  await page.getByLabel('游戏装备文本').fill(text + '\n--------\n已污染');
+  await page.getByRole('button', { name: '粘贴游戏物品' }).click();
+  const text = await page.getByLabel('游戏物品文本').inputValue();
+  await page.getByLabel('游戏物品文本').fill(text + '\n--------\n已污染');
   await page.getByRole('button', { name: '识别并导入' }).click();
   assert(await page.getByRole('button', { name: '计算制作策略', exact: true }).isDisabled());
   await page.reload({ waitUntil: 'networkidle' });

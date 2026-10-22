@@ -1,30 +1,45 @@
 import source from './data/equipment-index.json';
+import tradeItems from './data/trade-item-index.json';
 
 export type EquipmentSlot = 'weapon' | 'offhand' | 'helmet' | 'body' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'belt' | 'jewel' | 'flask' | 'charm' | 'relic' | 'other';
 export interface EquipmentProperty { name: string; label: string; values: number[]; text: string }
 export interface EquipmentMod {
   key: string; raw: string; text: string; label: string; ids: string[]; values: number[];
   searchable: boolean; value?: number; warning?: string; ref?: string; statId?: string;
+  affixType?: 'prefix' | 'suffix';
 }
 export interface Equipment {
   raw: string; name: string; baseName: string; baseNameEnglish?: string; nameEnglish?: string;
-  category: string; slot: EquipmentSlot; rarity: 'normal' | 'magic' | 'rare' | 'unique'; icon?: string;
+  category: string; slot: EquipmentSlot; rarity: 'normal' | 'magic' | 'rare' | 'unique' | 'currency' | 'gem' | 'card'; icon?: string;
+  kind?: 'equipment' | 'waystone' | 'tablet' | 'map' | 'currency' | 'gem' | 'other';
+  mapTier?: number; gemLevel?: number; quality?: number; areaLevel?: number; stackSize?: number; descriptionText?: string[];
+  officialTypeCandidates?: { type: string; category: string }[];
   itemLevel?: number; identified: boolean; corrupted: boolean; twoHanded: boolean;
+  doubleCorrupted?: boolean; flavourText?: string[]; stateText?: string[];
   properties: EquipmentProperty[]; mods: EquipmentMod[]; warnings: string[];
 }
-interface ItemEntry { en: string; zh: string; category: string; base?: string; icon?: string }
+interface ItemEntry { en: string; zh: string; category: string; base?: string; icon?: string; group?: string; mapTier?: number }
 interface Matcher { string: string; negate?: boolean; value?: number }
 interface StatEntry { ref: string; id?: string; matchers: Matcher[]; ids: Record<string, string[]> }
 interface Index { categories: string[]; simplify: Record<string, string>; items: ItemEntry[]; stats: StatEntry[] }
 const rawIndex = source as unknown as Index;
 // Some unreleased bases have no localized name. Keep their verified English entry without
 // passing a missing translation into Unicode normalization or discarding the whole catalogue.
-const index: Index = { ...rawIndex, items: rawIndex.items.filter((item) => typeof item.en === 'string')
+const index: Index = { ...rawIndex, items: [...rawIndex.items, ...tradeItems.items].filter((item) => typeof item.en === 'string')
   .map((item) => ({ ...item, zh: typeof item.zh === 'string' ? item.zh : item.en })) };
 export const EQUIPMENT_TRADE_CATEGORIES: readonly string[] = index.categories;
+export const ITEM_KIND_LABELS = { equipment: '装备', waystone: '换界石（地图）', tablet: '碑牌', map: '终局物品', currency: '通货 / 材料', gem: '宝石', other: '其他物品' };
+export const itemKindLabel = (item: Equipment): string => ITEM_KIND_LABELS[item.kind ?? 'equipment'];
+/** Verified placements of the same scalar, so upgrades need not share a fracture or implicit source. */
+export function equipmentStatAliases(ref: string, original: readonly string[]): string[] {
+  const hashes = new Set(original.map((id) => id.split('.').pop()));
+  const placements = new Set(['explicit', 'fractured', 'desecrated', ...original.map((id) => id.split('.')[0])]);
+  return [...new Set(index.stats.filter((stat) => stat.ref === ref).flatMap((stat) => Object.values(stat.ids).flat()))]
+    .filter((id) => hashes.has(id.split('.').pop()) && placements.has(id.split('.')[0]));
+}
 /** OpenCC character conversion only: translations still come from the pinned game vocabulary. */
 export const simplifyEquipmentText = (text: string): string => [...text].map((c) => index.simplify[c] ?? c).join('');
-const normalize = (text: string): string => simplifyEquipmentText(text).toLowerCase().replace(/[\u00a0\s]/g, '').replace(/[：]/g, ':').replace(/[，]/g, ',').replace(/[−–]/g, '-');
+const normalize = (text: string): string => simplifyEquipmentText(text).toLowerCase().replace(/[\u00a0\s]/g, '').replace(/[：]/g, ':').replace(/[，]/g, ',').replace(/[（]/g, '(').replace(/[）]/g, ')').replace(/[−–]/g, '-');
 const clean = (text: string): string => text.replace(/<[^>]*>/g, '')
   .replace(/\s*[—–]\s*(?:無法變動的值|无法变动的值|Unscalable Value)\s*$/i, '')
   .replace(/\(\s*[+-]?\d+(?:\.\d+)?\s*[-–]\s*[+-]?\d+(?:\.\d+)?\s*\)/g, '')
@@ -37,6 +52,8 @@ for (const item of index.items) for (const name of [item.en, item.zh]) {
   const key = normalize(name); const list = byName.get(key) ?? []; if (!list.includes(item)) list.push(item); byName.set(key, list);
 }
 const baseEntries = index.items.filter((i) => !i.base).sort((a, b) => Math.max(b.en.length, b.zh.length) - Math.max(a.en.length, a.zh.length));
+const kindOf = (category: string, base?: ItemEntry): Equipment['kind'] => category === 'map.waystone' ? 'waystone' : category === 'map.tablet' ? 'tablet'
+  : category.startsWith('map') ? 'map' : category.startsWith('currency') ? 'currency' : category.startsWith('gem') ? 'gem' : base?.group ? 'other' : 'equipment';
 const slotOf = (category: string): EquipmentSlot => category.startsWith('weapon.') ? 'weapon'
   : ({ 'armour.chest': 'body', 'armour.helmet': 'helmet', 'armour.gloves': 'gloves', 'armour.boots': 'boots',
     'armour.shield': 'offhand', 'armour.buckler': 'offhand', 'armour.focus': 'offhand', 'armour.quiver': 'offhand',
@@ -54,6 +71,14 @@ for (const [category, names] of Object.entries({
   'weapon.claw': ['Claws', '爪'], 'weapon.rod': ['Fishing Rods', 'FishingRods', '钓竿', '釣竿'],
   jewel: ['Jewels', '珠宝', '珠寶'], flask: ['Flasks', '药剂', '藥劑'], 'flask.life': ['Life Flasks', '生命药剂', '生命藥劑'], 'flask.mana': ['Mana Flasks', '魔力药剂', '魔力藥劑'],
   'flask.charm': ['Charms', '护符', '護符'], 'sanctum.relic': ['Relics', '圣物', '聖物'],
+  'map.waystone': ['Waystones', 'Maps', '地图', '地圖', '换界石', '換界石'], 'map.tablet': ['Tablets', '碑牌', '石板'],
+  'map.fragment': ['Map Fragments', '地图碎片', '地圖碎片'], 'map.breachstone': ['Breachstones', '裂痕石'],
+  'map.logbook': ['Expedition Logbooks', '探险日志', '探險日誌'], 'map.bosskey': ['Pinnacle Keys', '巅峰钥匙', '巔峰鑰匙'],
+  'map.barya': ['Baryas', '巨灵之币', '巨靈之幣', '试炼硬币', '試煉硬幣'], 'map.ultimatum': ['Ultimatum Keys', '最后通牒雕刻', '最後通牒雕刻'],
+  currency: ['Currency', 'Stackable Currency', '通货', '通貨', '可堆叠通货', '可堆疊通貨'],
+  'currency.omen': ['Omens', '预兆', '預兆'], 'currency.rune': ['Runes', '符文'], 'currency.soulcore': ['Soul Cores', '灵魂核心', '靈魂核心'],
+  gem: ['Gems', 'Skill Gems', 'Support Gems', 'Meta Gems', 'Uncut Skill Gems', 'Uncut Support Gems', 'Uncut Spirit Gems', '技能宝石', '技能寶石', '辅助宝石', '輔助寶石', '未切割的技能宝石', '未切割的辅助宝石', '未切割的精魂宝石'],
+  'gem.activegem': ['Skill Gems', 'Active Skill Gems', '技能宝石', '技能寶石'], 'gem.supportgem': ['Support Gems', 'Support Skill Gems', '辅助宝石', '輔助寶石'], 'gem.metagem': ['Meta Gems', 'Meta Skill Gems'],
 })) for (const name of names) classCategories[normalize(name)] = category;
 
 interface Compiled { stat: StatEntry; matcher: Matcher; pattern: RegExp }
@@ -88,15 +113,15 @@ function parseMod(raw: string, key: string, originHint?: string): EquipmentMod {
   const selectedIds = kind ? found.stat.ids[kind] ?? [] : found.stat.ids.explicit ?? found.stat.ids.sanctum ?? found.stat.ids.implicit ?? [];
   // Alternate placements of the same scalar are OR aliases, never independent required filters.
   const ids = [...new Set(kind ? selectedIds : [...selectedIds, ...(found.stat.ids.fractured ?? []), ...(found.stat.ids.desecrated ?? [])])];
-  const values = found.values.length ? found.values : found.matcher.value === undefined ? [] : [found.matcher.value];
-  const damageRange = /^Adds # to # .+ Damage/.test(found.stat.ref);
+  const values = found.values.length ? found.values : found.matcher.value === undefined || !found.stat.ref.includes('#') ? [] : [found.matcher.value];
+  const damageRange = /^Adds # to # .+ Damage/i.test(found.stat.ref);
   const scalar = values.length === 1 ? values[0]! * (found.matcher.negate ? -1 : 1)
     : values.length === 2 && damageRange ? (values[0]! + values[1]!) / 2 * (found.matcher.negate ? -1 : 1) : undefined;
   const chinese = found.stat.matchers.find((matcher) => /[\u3400-\u9fff]/u.test(matcher.string)
     && Boolean(matcher.negate) === Boolean(found.matcher.negate)
     && (matcher.string.match(/#/g)?.length ?? 0) === found.values.length);
   let position = 0;
-  const label = chinese && (found.values.length <= 1 || damageRange)
+  const label = !/[\u3400-\u9fff]/u.test(text) && chinese && (found.values.length === 1 || damageRange)
     ? simplifyEquipmentText(chinese.string.replace(/#/g, () => String(found.values[position++]))) : simplifyEquipmentText(text);
   return { key, raw, text, label, ids, values, searchable: ids.length > 0,
     ...(scalar === undefined ? {} : { value: scalar }), ref: found.stat.ref, ...(found.stat.id ? { statId: found.stat.id } : {}),
@@ -109,12 +134,16 @@ export function localizeEquipmentName(name: string): string {
   return simplifyEquipmentText(byName.get(normalize(name))?.[0]?.zh ?? name);
 }
 export function localizeEquipmentStat(text: string): string { return parseMod(text, 'display').label; }
+/** Match a rendered rule-snapshot line to the same official scalar as a clipboard modifier. */
+export function matchEquipmentStat(text: string): EquipmentMod { return parseMod(text, 'reference'); }
 
 const propertyNames: [string, string, string[]][] = [
   ['armour', '护甲', ['Armour', '护甲']], ['evasion', '闪避值', ['Evasion Rating', '闪避值', '闪避']], ['energyShield', '能量护盾', ['Energy Shield', '能量护盾']],
   ['physicalDamage', '物理伤害', ['Physical Damage', '物理伤害']], ['elementalDamage', '元素伤害', ['Elemental Damage', '元素伤害']], ['chaosDamage', '混沌伤害', ['Chaos Damage', '混沌伤害']],
   ['attacksPerSecond', '每秒攻击次数', ['Attacks per Second', '每秒攻击次数', '每秒攻击速度']], ['criticalHitChance', '暴击率', ['Critical Hit Chance', '暴击几率', '暴击率']],
   ['spirit', '精魂', ['Spirit', '精魂']], ['block', '格挡率', ['Block chance', 'Chance to Block', '格挡几率', '格挡率']], ['quality', '品质', ['Quality', '品质']],
+  ['mapBonus', '换界石掉落概率', ['Waystone Drop Chance', '换界石掉落机率', '换界石掉落几率', '换界石掉落概率']],
+  ['mapPacksize', '怪物群大小', ['Monster Pack Size', 'Pack Size', '怪物群大小']],
 ];
 const propertiesByLabel = new Map(propertyNames.flatMap(([name, label, aliases]) => aliases.map((alias) => [normalize(alias), { name, label }] as const)));
 export function localizeEquipmentProperty(text: string): string {
@@ -131,39 +160,85 @@ export function parseEquipment(raw: string): Equipment | null {
   const rarityAt = lines.findIndex((line) => /^(?:Rarity|稀有度)[:：]/i.test(line));
   if (rarityAt < 0) return null;
   const rarityText = normalize(lines[rarityAt]!.split(/[:：]/).slice(1).join(':'));
-  const rarity = /unique|传奇|独特/.test(rarityText) ? 'unique' : /rare|稀有/.test(rarityText) ? 'rare' : /magic|魔法/.test(rarityText) ? 'magic' : /normal|普通/.test(rarityText) ? 'normal' : undefined;
+  const rarity = /unique|传奇|独特/.test(rarityText) ? 'unique' : /rare|稀有/.test(rarityText) ? 'rare' : /magic|魔法/.test(rarityText) ? 'magic' : /normal|普通/.test(rarityText) ? 'normal'
+    : /currency|通货/.test(rarityText) ? 'currency' : /gem|宝石/.test(rarityText) ? 'gem' : /divination|命运卡/.test(rarityText) ? 'card' : undefined;
   if (!rarity) return null;
   const header: string[] = [];
   for (let i = rarityAt + 1; i < lines.length && !/^-{3,}$/.test(lines[i]!); i++) header.push(lines[i]!);
   if (!header.length) return null;
-  const unique = rarity === 'unique' ? header.flatMap((line) => byName.get(normalize(line)) ?? []).find((item) => item.base) : undefined;
-  let base = header.flatMap((line) => byName.get(normalize(line)) ?? []).find((item) => !item.base);
-  if (!base && unique) base = byName.get(normalize(unique.base!))?.find((i) => !i.base);
-  if (!base && rarity === 'magic') base = baseEntries.find((item) => header.some((line) => normalize(line).includes(normalize(item.en)) || normalize(line).includes(normalize(item.zh))));
   const classLine = lines.find((line) => /^(?:Item Class|物品类别|物品類別|物品種類|物品种类|物品类型|物品類型)[:：]/i.test(line));
   const classCategory = classLine ? classCategories[normalize(classLine.split(/[:：]/).slice(1).join(':'))] : undefined;
-  const category = unique?.category ?? base?.category ?? classCategory;
-  if (!category) return null;
+  const unique = rarity === 'unique' ? header.flatMap((line) => byName.get(normalize(line)) ?? []).find((item) => item.base) : undefined;
+  let candidates = header.flatMap((line) => byName.get(normalize(line)) ?? []).filter((item) => !item.base);
+  if (classCategory && candidates.some((item) => item.category === classCategory)) candidates = candidates.filter((item) => item.category === classCategory);
+  const exactEnglish = candidates.filter((item) => header.some((line) => normalize(line) === normalize(item.en)));
+  if (exactEnglish.length) candidates = exactEnglish;
+  const distinct = [...new Map(candidates.map((item) => [item.en, item])).values()];
+  const ambiguous = distinct.length > 1 && distinct.every((item) => item.group);
+  let base = ambiguous ? undefined : candidates[0];
+  if (!base && unique) base = byName.get(normalize(unique.base!))?.find((i) => !i.base);
+  if (!base && rarity === 'magic') base = baseEntries.find((item) => header.some((line) => normalize(line).includes(normalize(item.en)) || normalize(line).includes(normalize(item.zh))));
+  // The class says Waystone, but some clients print its tier only in the property block.
+  const tierMatch = raw.match(/(?:Waystone Tier|Map Tier|地图阶级|地圖階級|换界石阶级|換界石階級|阶级|階級)[:：]\s*(\d+)/i);
+  const tier = tierMatch ? Number(tierMatch[1]) : undefined;
+  if (!base && tier !== undefined && header.some((line) => /waystone|换界石/i.test(simplifyEquipmentText(line)))) base = baseEntries.find((item) => item.category === 'map.waystone' && item.mapTier === tier);
+  const category = unique?.category ?? base?.category ?? classCategory ?? (ambiguous ? distinct[0]?.category : undefined);
+  if (category === undefined) return null;
+  const kind = kindOf(category, base ?? unique);
   const warnings: string[] = [];
-  if (!base) warnings.push('底座尚未收录，搜索仅限定装备类别；请在官网核对底座。');
+  if (!base) warnings.push(ambiguous ? '此中文名称对应多件官方物品，请先选择准确名称后查价。' : kind === 'equipment' ? '底座尚未收录，搜索仅限定装备类别；请在官网核对底座。' : '物品官方名称尚未匹配，暂不生成整个类别的估价。');
   if (rarity === 'unique' && !unique) warnings.push('传奇名称尚未匹配英文索引；搜索仅限定已识别底座与传奇稀有度。');
   const properties: EquipmentProperty[] = []; const modLines: string[] = [];
+  const descriptionText: string[] = [];
+  const printedNumber = (pattern: RegExp): number | undefined => { const match = raw.match(pattern); return match ? Number(match[1]!.replace(/,/g, '')) : undefined; };
+  const quality = printedNumber(/(?:^|\n)(?:Quality|品質|品质)(?:[（(][^\n:：]*[）)])?[:：]\s*\+?(\d+)/i);
+  const gemLevel = kind === 'gem' ? printedNumber(/(?:^|\n)(?:Level|等級|等级)[:：]\s*(\d+)/i) : undefined;
+  const areaLevel = printedNumber(/(?:^|\n)(?:Area Level|區域等級|区域等级)[:：]\s*(\d+)/i);
+  const stackSize = printedNumber(/(?:Stack Size|堆疊數量|堆叠数量)[:：]\s*([\d,]+)/i);
   const origins = new Map<number, string>(); let currentOrigin: string | undefined;
-  const body = lines.slice(rarityAt + 1 + header.length);
+  const affixTypes = new Map<number, 'prefix' | 'suffix'>(); let currentAffixType: 'prefix' | 'suffix' | undefined;
+  const flavourText: string[] = [], stateText: string[] = [];
+  const originalBody = lines.slice(rarityAt + 1 + header.length);
+  let seenAdvancedAffix = false;
+  const body: string[] = [];
+  const isDoubleCorrupted = (line: string) => /^(?:double\s+corrupted|twice\s+corrupted|双重\s*(?:corrupted|腐化|污染)|双重已腐化|双重已污染)$/i.test(simplifyEquipmentText(line));
+  for (const section of originalBody.join('\n').split(/(?:^|\n)-{3,}(?:\n|$)/)) {
+    const block = section.split('\n').filter(Boolean);
+    const advanced = block.some((line) => /^\{/.test(line));
+    const content = block.filter((line) => {
+      if (isDoubleCorrupted(line)) { stateText.push('双重腐化'); return false; }
+      if (/^(?:Fractured Item|破裂之物)$/i.test(line)) { stateText.push('破裂之物'); return false; }
+      return true;
+    });
+    const candidates = content.filter((line) => !ignoredLine(simplifyEquipmentText(line)));
+    const known = candidates.some((line) => parseMod(line, 'section').searchable)
+      || candidates.length > 1 && parseMod(candidates.join('\n'), 'section').searchable;
+    const flavour = rarity === 'unique' && !advanced && !known && candidates.length > 0
+      && (seenAdvancedAffix && candidates.every((line) => !/\d/.test(line)) || /^["“「『]/.test(candidates[0]!));
+    if (flavour) flavourText.push(...candidates.map(simplifyEquipmentText));
+    else body.push(...content, '--------');
+    if (advanced) seenAdvancedAffix = true;
+  }
   for (const line of body) {
-    if (/^-{3,}$/.test(line)) { modLines.push(''); currentOrigin = undefined; continue; }
+    if (/^-{3,}$/.test(line)) { modLines.push(''); currentOrigin = undefined; currentAffixType = undefined; continue; }
     if (/^\{/.test(line)) {
       const metadata = simplifyEquipmentText(line);
+      currentAffixType = /prefix|前缀/i.test(metadata) ? 'prefix' : /suffix|后缀/i.test(metadata) ? 'suffix' : undefined;
       currentOrigin = /implicit|固定/i.test(metadata) ? 'implicit' : /fractured|破裂/i.test(metadata) ? 'fractured'
         : /rune|符文/i.test(metadata) ? 'rune' : /enchant|附魔/i.test(metadata) ? 'enchant'
           : /desecrated|亵渎/i.test(metadata) ? 'desecrated' : /crafted|工艺/i.test(metadata) ? 'crafted' : undefined;
       continue;
     }
+    if (kind !== 'equipment' && /^(?:Can be used|Place this|Travel to|在.*(?:地图装置|地圖裝置)|透過.*(?:地图|地圖)|通过.*地图|右键|右鍵)/i.test(line)
+      && !parseMod(line, 'instruction', currentOrigin).searchable) { descriptionText.push(simplifyEquipmentText(line)); continue; }
+    if (kind !== 'equipment' && /^(?:Waystone Tier|Map Tier|换界石阶级|換界石階級|地图阶级|地圖階級|階級|阶级|Stack Size|堆疊數量|堆叠数量|Area Level|區域等級|区域等级|Gem Level|宝石等级|寶石等級|Quality|品質|品质)[:：]/i.test(line)) continue;
     const colon = line.search(/[:：]/);
     const property = colon > 0 ? propertiesByLabel.get(normalize(line.slice(0, colon).replace(/[（(][^（）()]*[）)]/g, ''))) : undefined;
     if (property) { properties.push({ ...property, text: line, values: numbers(clean(line.slice(colon + 1))) }); continue; }
-    if (ignoredLine(simplifyEquipmentText(line))) continue;
+    if ((kind === 'currency' || kind === 'gem' || kind === 'other') && !parseMod(line, 'description', currentOrigin).searchable) { descriptionText.push(simplifyEquipmentText(line)); continue; }
+    if (ignoredLine(simplifyEquipmentText(line)) && !parseMod(line, 'ignored-check', currentOrigin).searchable) continue;
     if (currentOrigin) origins.set(modLines.length, currentOrigin);
+    if (currentAffixType) affixTypes.set(modLines.length, currentAffixType);
     modLines.push(line);
   }
   const mods: EquipmentMod[] = [];
@@ -176,6 +251,7 @@ export function parseEquipment(raw: string): Equipment | null {
       const joined = parseMod(modLines.slice(i, i + count).join('\n'), String(i), origins.get(i));
       if (joined.searchable) { best = joined; consumed = count - 1; }
     }
+    if (affixTypes.has(i)) best.affixType = affixTypes.get(i);
     mods.push(best); i += consumed;
   }
   const itemLevelMatch = raw.match(/(?:Item Level|物品等级|物品等級)[:：]\s*(\d+)/i);
@@ -184,7 +260,12 @@ export function parseEquipment(raw: string): Equipment | null {
   return { raw, name: header[0]!, baseName: base ? (header.find((line) => normalize(line) === normalize(base.en) || normalize(line) === normalize(base.zh)) ?? base.zh) : header[header.length - 1]!,
     ...(base ? { baseNameEnglish: base.en } : {}), ...(unique ? { nameEnglish: unique.en } : {}), category, slot: slotOf(category), rarity,
     ...((unique?.icon ?? base?.icon) ? { icon: unique?.icon ?? base?.icon } : {}), ...(itemLevelMatch ? { itemLevel: Number(itemLevelMatch[1]) } : {}),
-    identified: !/Unidentified|未鉴定|未鑑定/i.test(raw), corrupted: /(?:^|\n)(?:Corrupted|已腐化|已污染)(?:\r?\n|$)/i.test(raw),
+    identified: !/(?:^|\n)\s*(?:Unidentified|未鉴定|未鑑定)\s*(?:\r?\n|$)/i.test(raw), corrupted: stateText.includes('双重腐化') || /(?:^|\n)(?:Corrupted|已腐化|已污染)(?:\r?\n|$)/i.test(raw),
+    ...(stateText.includes('双重腐化') ? { doubleCorrupted: true } : {}), ...(flavourText.length ? { flavourText } : {}), ...(stateText.length ? { stateText } : {}),
+    kind, ...(kind === 'waystone' && (tier ?? base?.mapTier) !== undefined ? { mapTier: tier ?? base?.mapTier } : {}),
+    ...(ambiguous ? { officialTypeCandidates: distinct.map((item) => ({ type: item.en, category: item.category })) } : {}),
+    ...(gemLevel === undefined ? {} : { gemLevel }), ...(quality === undefined ? {} : { quality }), ...(areaLevel === undefined ? {} : { areaLevel }),
+    ...(stackSize === undefined ? {} : { stackSize }), ...(descriptionText.length ? { descriptionText } : {}),
     twoHanded: /weapon\.(?:two|bow|crossbow|staff|warstaff|talisman)/.test(category), properties, mods, warnings };
 }
 

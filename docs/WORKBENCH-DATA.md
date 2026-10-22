@@ -59,7 +59,15 @@
 
 高级复制范围先去除区间参考，再读取实际显示值。物品伤害区间分隔符不作为负号；双端伤害按均值查询，其他未核验多值公式仅查是否存在。装备比较只加总直接属性，局部防御／伤害修正已包括在物品显示属性里，不重复计算。无法确认的条件效果单列，不将其收益当作零。
 
-## 官方通货图标来源
+## 全物品查价索引
+
+`src/workbench/data/trade-item-index.json` 补充 1589 条非装备物品名称记录，覆盖官方目录中的地图／终局物品、宝石、通货／材料与胎赠；支持 63 个官方类别，并对没有类别筛选的物品使用准确官方类型查询。数据于 2026-10-22 读取 [GGG items](https://www.pathofexile.com/api/trade2/data/items) 和 [GGG filters](https://www.pathofexile.com/api/trade2/data/filters)，繁体名称及原图引用沿用上文相同固定版本 EE2 MIT 词库。
+
+生成脚本 `node tools/refresh/trade_item_index.mjs`，`--refresh` 更新官方目录；缓存位于忽略提交的 `artifacts/all-items-official-*.json`。查价与穿戴／制作范围独立，新增物品不会自动加入制作引擎。翻译同名但英文类型不同的宝石要求手动选择，官方名称无法确定时停止估价。
+
+地图阶级使用 `map_filters.map_tier`，宝石等级使用 `misc_filters.gem_level`，品质使用 `type_filters.quality`；未识别的真实地图词缀继续保留。堆叠数量仅显示背包持有数，不作为通货单件估价的倍数。原生助手接受不含物品等级的通货和宝石文本。
+
+## 官方通货图标映射
 
 通货图标清单 `src/workbench/data/currency-icons.json` 于 2026-10-22 从 [GGG 官方 trade2 static 接口](https://www.pathofexile.com/api/trade2/data/static)按英文 `text` 精确匹配获取，并与上述固定版本 Exiled Exchange 2 的 `items.ndjson` 交叉核对。包含模拟器的 15 种通货、高阶／完美混沌石及神圣石，共 18 项、8 张不同原图。全部 URL 为 `web.poecdn.com` 的 PoE2 图片，逐张验证 HTTP 200、PNG 签名、尺寸、内容类型及 SHA-256，并保存核验元数据。
 

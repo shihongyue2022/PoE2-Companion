@@ -24,7 +24,7 @@ try {
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   await page.locator('.wb-pool-row').first().waitFor({ state: 'attached' });
   await page.getByRole('navigation', { name: '工作区域' }).getByRole('button', { name: '制作策略' }).click();
-  await page.getByRole('button', { name: '粘贴游戏装备' }).click();
+  await page.getByRole('button', { name: '粘贴游戏物品' }).click();
   await page.getByRole('button', { name: '试用戒指示例' }).click();
   const craftBefore = await page.evaluate(() => localStorage.getItem('poe2-workbench-v1'));
   const nav = page.getByRole('navigation', { name: '工作区域' });
@@ -52,13 +52,15 @@ try {
   await loadout.screenshot({ path: 'artifacts/workbench/character-equipment.png' });
 
   await loadout.getByRole('button', { name: '寻找这件的升级' }).click();
-  const pricing = page.getByRole('region', { name: '全装备查价' });
+  const pricing = page.getByRole('region', { name: '全物品查价' });
   const upgradeUrl = new URL(await pricing.getByRole('link', { name: '打开升级候选搜索' }).getAttribute('href'));
   const upgrade = JSON.parse(upgradeUrl.searchParams.get('q'));
   assert.equal(upgrade.query.filters.type_filters.filters.category.option, 'armour.boots');
   assert.equal(upgrade.query.type, undefined);
-  assert(upgrade.query.filters.equipment_filters.filters.ar.min > 250);
-  pass('upgrade search raises selected thresholds while releasing the original armour base');
+  assert.equal(upgrade.query.filters.equipment_filters, undefined);
+  assert.deepEqual(upgrade.sort, { 'statgroup.0': 'desc' });
+  assert.equal(upgrade.query.stats[0].type, 'weight');
+  pass('upgrade search ranks current-direction weighted stats while releasing the original armour base');
   await page.getByRole('button', { name: '回到角色装备', exact: true }).click();
   assert.equal(await loadout.getByLabel('粘贴候选装备').inputValue(), betterBoots.replace('+120(110-120)', '+150(140-150)').replace('+35(31-35)', '+10(10-15)'));
   await page.reload({ waitUntil: 'networkidle' });

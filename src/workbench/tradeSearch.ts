@@ -126,12 +126,12 @@ export interface FlexibleTradeOptions {
 
 interface StatFilter {
   readonly id: string;
-  readonly value?: { readonly min?: number; readonly max?: number };
+  readonly value?: { readonly min?: number; readonly max?: number; readonly weight?: number };
   readonly disabled: false;
 }
 
 interface StatGroup {
-  readonly type: 'and' | 'count';
+  readonly type: 'and' | 'count' | 'weight';
   readonly value?: { readonly min: number };
   readonly filters: readonly StatFilter[];
   readonly disabled: false;
@@ -144,20 +144,26 @@ export interface FlexibleTradeDocument {
     readonly status: { readonly option: 'any' | 'online' | 'securable' };
     readonly filters: {
       readonly type_filters: { readonly filters: {
-        readonly category: { readonly option: string };
-        readonly rarity: { readonly option: NonNullable<FlexibleTradeOptions['rarity']> };
+        readonly category?: { readonly option: string };
+        readonly rarity?: { readonly option: NonNullable<FlexibleTradeOptions['rarity']> };
         readonly ilvl?: { readonly min?: number; readonly max?: number };
+        readonly quality?: { readonly min?: number; readonly max?: number };
       } };
       readonly equipment_filters?: { readonly filters: Readonly<Record<string, { readonly min?: number; readonly max?: number }>> };
+      readonly map_filters?: { readonly filters: Readonly<Record<string, { readonly min?: number; readonly max?: number }>> };
+      readonly trade_filters?: { readonly filters: { readonly price: { readonly max: number; readonly option: string } } };
       readonly misc_filters?: { readonly filters: {
         readonly ilvl?: { readonly min?: number; readonly max?: number };
         readonly identified?: { readonly option: 'true' | 'false' };
         readonly corrupted?: { readonly option: 'true' | 'false' };
+        readonly twice_corrupted?: { readonly option: 'true' | 'false' };
+        readonly gem_level?: { readonly min?: number; readonly max?: number };
+        readonly area_level?: { readonly min?: number; readonly max?: number };
       } };
     };
     readonly stats: readonly StatGroup[];
   };
-  readonly sort: { readonly price: 'asc' };
+  readonly sort: { readonly price: 'asc' } | { readonly 'statgroup.0': 'desc' };
 }
 
 function readNumber(text: string, label: string): number | undefined {

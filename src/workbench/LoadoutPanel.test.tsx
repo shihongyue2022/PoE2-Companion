@@ -17,6 +17,24 @@ Item Level: 82
 describe('loadout player actions', () => {
   beforeEach(() => { localStorage.clear(); });
 
+  it('records a game baseline and distinguishes overcapped resistance from equipment-only changes', async () => {
+    const user = userEvent.setup();
+    render(<LoadoutPanel onPrice={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '左戒指：未装备' }));
+    fireEvent.change(screen.getByLabelText('导入此栏装备'), { target: { value: ring('Cinder Band', 70) } });
+    await user.click(screen.getByRole('button', { name: '放入左戒指' }));
+    await user.click(screen.getByText('游戏角色面板基准', { exact: false }));
+    fireEvent.change(screen.getByLabelText('角色面板最大生命'), { target: { value: '1530' } });
+    fireEvent.change(screen.getByLabelText('角色面板能量护盾'), { target: { value: '4898' } });
+    fireEvent.change(screen.getByLabelText('角色面板火焰抗性'), { target: { value: '189' } });
+    await user.click(screen.getByRole('button', { name: '保存当前游戏面板基准' }));
+    fireEvent.change(screen.getByLabelText('粘贴候选装备'), { target: { value: ring('Lower Fire', 70).replace('+25%', '+5%') } });
+    expect(screen.getByText('已比较属性持平')).toBeVisible();
+    expect(screen.getByText(/有效 75% → 75%；总值 189% → 169%/)).toBeVisible();
+    const state = JSON.parse(localStorage.getItem(LOADOUT_STORAGE_KEY)!);
+    expect(state.character.values).toMatchObject({ life: 1530, energyShield: 4898, fireResistance: 189 });
+  });
+
   it('records two rings independently, restores them, and prices only the selected item without changing the craft session', async () => {
     const user = userEvent.setup();
     const onPrice = vi.fn();

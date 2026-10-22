@@ -4,8 +4,35 @@ import { equipmentMetricDetails, equipmentMetrics, parseEquipment } from './gene
 import { buildEquipmentTrade, equipmentTradeRows } from './genericEquipmentTrade';
 import { BREACH_RING_SAMPLE } from './fixtures/breachRing';
 import { BOOTS_SAMPLE, WEAPON_SAMPLE } from './fixtures/fullGear';
+import { IGNIFERIS_SAMPLE } from './fixtures/igniferis';
 
 describe('all equipment clipboard parsing and market searches', () => {
+  it('recognizes all six Igniferis effects and keeps its flavour text outside the unmatched modifiers', () => {
+    const parsed = parseEquipment(IGNIFERIS_SAMPLE)!;
+    expect(parsed.nameEnglish).toBe('Igniferis');
+    expect(parsed.mods).toHaveLength(6);
+    expect(parsed.mods.every((mod) => mod.searchable)).toBe(true);
+    expect(parsed.mods.find((mod) => mod.ref === '# Life Regeneration per second')?.value).toBe(2.7);
+    expect(parsed.mods.find((mod) => mod.ref?.startsWith('Every 4 seconds'))?.value).toBe(0.2);
+    expect(parsed.flavourText).toHaveLength(2);
+    expect(parsed.warnings).toEqual([]);
+  });
+  it('keeps double corruption as an official item-state filter and preserves unknown real affixes', () => {
+    const parsed = parseEquipment(`${IGNIFERIS_SAMPLE}\n--------\n雙重 Corrupted`)!;
+    expect(parsed).toMatchObject({ corrupted: true, doubleCorrupted: true, stateText: ['双重腐化'] });
+    expect(parsed.mods).toHaveLength(6);
+    const query = buildEquipmentTrade({ equipment: parsed, league: 'Test', rows: equipmentTradeRows(parsed) }).query;
+    expect(query.query.filters.misc_filters?.filters).toMatchObject({ corrupted: { option: 'true' }, twice_corrupted: { option: 'true' } });
+    const unknown = parseEquipment(IGNIFERIS_SAMPLE.replace('增加25%照亮範圍', '尚未收录的真正特殊效果'))!;
+    expect(unknown.mods.some((mod) => mod.raw === '尚未收录的真正特殊效果' && !mod.searchable)).toBe(true);
+  });
+  it('treats the constant Wind-skill mechanic as presence rather than a numeric value of zero', () => {
+    const parsed = parseEquipment(IGNIFERIS_SAMPLE.replace('增加25%照亮範圍', '可被元素地面強化的疾風技能視為\n受到冰緩地面強化'))!;
+    const wind = parsed.mods.find((mod) => mod.ref?.startsWith('Wind Skills'))!;
+    expect(wind.searchable).toBe(true);
+    expect(wind.value).toBeUndefined();
+    expect(wind.label).toContain('冰缓');
+  });
   it('recognizes every indexed equipment category in English and available Traditional names', () => {
     for (const category of index.categories) {
       const entry = index.items.find((item) => item.category === category && !('base' in item))!;
@@ -16,7 +43,7 @@ describe('all equipment clipboard parsing and market searches', () => {
         expect(parsed?.baseNameEnglish, name).toBe(entry.en);
       }
     }
-    expect(parseEquipment('Rarity: Currency\nOrb of Alchemy')).toBeNull();
+    expect(parseEquipment('Rarity: Currency\nOrb of Alchemy')).toMatchObject({ kind: 'currency', category: 'currency' });
   });
 
   it('reads actual advanced-copy values instead of range endpoints or tier metadata', () => {
@@ -66,10 +93,12 @@ describe('all equipment clipboard parsing and market searches', () => {
   it('allows wider upgrade searches without carrying the old base restriction or creating fake tiers', () => {
     const equipment = parseEquipment(BOOTS_SAMPLE)!;
     const rows = equipmentTradeRows(equipment, 'upgrade');
-    expect(rows.find((row) => row.key === 'property:armour')?.min).toBe('220');
-    const result = buildEquipmentTrade({ equipment, league: 'Test', rows, exactBase: false });
+    expect(rows.find((row) => row.key === 'property:armour')).toMatchObject({ min: '', enabled: false });
+    const result = buildEquipmentTrade({ equipment, league: 'Test', rows, exactBase: false, ranking: true });
+    expect(result.query.sort).toEqual({ 'statgroup.0': 'desc' });
+    expect(result.query.query.stats[0]?.type).toBe('weight');
     expect(result.query.query.type).toBeUndefined();
-    expect(result.query.query.filters.type_filters.filters.category.option).toBe('armour.boots');
+    expect(result.query.query.filters.type_filters.filters.category?.option).toBe('armour.boots');
     expect(JSON.stringify(result.query)).not.toMatch(/tier|ilvl/);
   });
 

@@ -16,7 +16,7 @@ Item Level: 82
 +100(90-100) to maximum Life
 { Suffix Modifier "of the Ice" (Tier: 2) — Cold, Resistance }
 +35(31-35)% to Cold Resistance
-{ Suffix Modifier "of Haste" (Tier: 1) — Speed }
+{ Prefix Modifier "Hellion's" (Tier: 1) — Speed }
 30(25-30)% increased Movement Speed`;
 
 export const BOOTS_UPGRADE = BOOTS_SAMPLE.replace('Dusk Trail', 'Dawn Trail')

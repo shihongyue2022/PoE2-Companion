@@ -6,18 +6,19 @@ import {
   type MarketEstimateResult,
 } from '../src/workbench/marketEstimate';
 import { TRADE_CATEGORY } from '../src/lib/gearTrade';
+import tradeItems from '../src/workbench/data/trade-item-index.json';
 
 const OFFICIAL = 'https://www.pathofexile.com';
 const MAX_BODY = 65_536;
 const CACHE_TTL = 120_000;
 const MIN_ESTIMATE_INTERVAL = 15_000;
-// Explicit equipment-only allowlist, verified against the official trade2 filters metadata.
-// Keep this broader than planner-supported bases: clipboard comparisons also cover jewels and flasks.
-const EQUIPMENT_CATEGORIES = new Set([...Object.values(TRADE_CATEGORY),
+// Only categories verified in official trade2 metadata; items without a category require an exact official type.
+const ITEM_CATEGORIES = new Set([...tradeItems.categories, ...Object.values(TRADE_CATEGORY),
   'weapon.claw', 'weapon.dagger', 'weapon.onesword', 'weapon.oneaxe', 'weapon.flail',
   'weapon.twosword', 'weapon.twoaxe', 'weapon.talisman', 'weapon.rod',
   'jewel', 'flask', 'flask.life', 'flask.mana', 'flask.charm', 'sanctum.relic',
 ]);
+const OFFICIAL_ITEM_TYPES = new Set(tradeItems.items.map((item) => 'base' in item ? item.base : item.en));
 type JsonObject = Record<string, unknown>;
 const object = (value: unknown): value is JsonObject => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -54,7 +55,7 @@ export function validLoopbackRequest(headers: IncomingMessage['headers'], remote
 export function validateClipboard(value: unknown): { raw: string; mode: ClipboardPacket['mode'] } {
   if (!object(value) || typeof value.raw !== 'string' || Buffer.byteLength(value.raw) > MAX_BODY - 256
     || !/^(?:Rarity|稀有度)\s*[:：]/im.test(value.raw)) {
-    throw new WorkbenchRequestError(400, '请先复制完整装备文本，需包含稀有度。');
+    throw new WorkbenchRequestError(400, '请先复制完整物品文本，需包含稀有度。');
   }
   if (value.mode !== 'trade' && value.mode !== 'checkpoint') throw new WorkbenchRequestError(400, '未知的快捷键操作。');
   // Equipment clipboard text must not carry embedded NUL bytes into parsing or native messages.
@@ -71,26 +72,42 @@ export function validateEstimate(value: unknown): { league: string; search: Json
   const query = value.search.query;
   if (!object(query.status) || !['any', 'online', 'securable'].includes(String(query.status.option))
     || !object(query.filters) || !object(query.filters.type_filters) || !object(query.filters.type_filters.filters)
-    || !object(query.filters.type_filters.filters.category)
-    || !EQUIPMENT_CATEGORIES.has(String(query.filters.type_filters.filters.category.option))
+    || (query.filters.type_filters.filters.category === undefined
+      ? typeof query.type !== 'string' || !OFFICIAL_ITEM_TYPES.has(query.type)
+      : !object(query.filters.type_filters.filters.category) || !ITEM_CATEGORIES.has(String(query.filters.type_filters.filters.category.option)))
     || !Array.isArray(query.stats) || query.stats.length > 64) {
-    throw new WorkbenchRequestError(400, '请选择受支持的装备类别和有效的官方交易条件。');
+    throw new WorkbenchRequestError(400, '请选择有效的官方物品类别或已核对的物品名称。');
   }
   for (const key of ['type', 'name']) if (query[key] !== undefined
     && (typeof query[key] !== 'string' || query[key].length > 256
       || Array.from(query[key]).some((character) => character.charCodeAt(0) < 32))) {
     throw new WorkbenchRequestError(400, '装备名称或底座无效。');
   }
+  for (const [groupId, group] of Object.entries(query.filters)) {
+    if (!Object.prototype.hasOwnProperty.call(tradeItems.fields, groupId) || !object(group) || !object(group.filters)) throw new WorkbenchRequestError(400, '物品筛选分组无效。');
+    const allowed = tradeItems.fields[groupId as keyof typeof tradeItems.fields];
+    for (const [field, filter] of Object.entries(group.filters)) {
+      if ((!allowed.includes(field) && !(groupId === 'misc_filters' && field === 'ilvl')) || !object(filter)) throw new WorkbenchRequestError(400, '物品筛选字段尚未核对。');
+      for (const bound of ['min', 'max']) if (filter[bound] !== undefined && (typeof filter[bound] !== 'number' || !Number.isFinite(filter[bound]))) throw new WorkbenchRequestError(400, '物品筛选数值无效。');
+      if (typeof filter.min === 'number' && typeof filter.max === 'number' && filter.min > filter.max) throw new WorkbenchRequestError(400, '筛选下限不能高于上限。');
+    }
+  }
   let count = 0;
   for (const group of query.stats) {
-    if (!object(group) || !['and', 'count', 'not', 'if'].includes(String(group.type)) || !Array.isArray(group.filters)) {
+    if (!object(group) || !['and', 'count', 'not', 'if', 'weight'].includes(String(group.type)) || !Array.isArray(group.filters)) {
       throw new WorkbenchRequestError(400, '词缀筛选格式无效。');
     }
     count += group.filters.length;
     if (count > 384 || group.filters.some((filter) => !object(filter) || typeof filter.id !== 'string'
       || !/^[a-z_]+\.[a-zA-Z0-9_]+$/.test(filter.id))) throw new WorkbenchRequestError(400, '词缀筛选过多或属性编号无效。');
+    if (group.type === 'weight' && group.filters.some((filter) => !object(filter) || !object(filter.value)
+      || typeof filter.value.weight !== 'number' || !Number.isFinite(filter.value.weight) || filter.value.weight <= 0 || filter.value.weight > 1_000_000)) {
+      throw new WorkbenchRequestError(400, '综合评分权重无效。');
+    }
   }
-  return { league: value.league.trim(), search: { query, sort: { price: 'asc' } } };
+  const ranked = object(value.search.sort) && value.search.sort['statgroup.0'] === 'desc';
+  if (ranked && (!object(query.stats[0]) || query.stats[0].type !== 'weight' || !Array.isArray(query.stats[0].filters) || !query.stats[0].filters.length)) throw new WorkbenchRequestError(400, '综合排序需要有效的加权条件。');
+  return { league: value.league.trim(), search: { query, sort: ranked ? { 'statgroup.0': 'desc' } : { price: 'asc' } } };
 }
 
 /** Absolute deadline from Retry-After and the official dynamic rate-limit state. */
@@ -143,6 +160,12 @@ export function createEstimateService(options: EstimateServiceOptions = {}) {
       throw new WorkbenchRequestError(429, '官方交易请求次数已达限制。');
     }
     if ([401, 403].includes(response.status)) throw new WorkbenchRequestError(response.status, '官方交易拒绝了匿名请求，请在官网查看挂单。');
+    if (response.status === 400) {
+      const detail: unknown = await response.json().catch(() => null);
+      if (object(detail) && object(detail.error) && typeof detail.error.message === 'string' && /too complex/i.test(detail.error.message)) {
+        throw new WorkbenchRequestError(403, '官方限制了这次匿名复杂查询，请登录官网后打开完整搜索链接，或减少筛选条件。此限制不代表市场没有挂单。');
+      }
+    }
     if (!response.ok) throw new WorkbenchRequestError(502, `官方交易暂时不可用（HTTP ${response.status}）。`);
     let body: unknown;
     try { body = await response.json(); } catch { throw new WorkbenchRequestError(502, '官方交易没有返回可读取的数据，请在官网查看。'); }
@@ -176,16 +199,18 @@ export function createEstimateService(options: EstimateServiceOptions = {}) {
         }
       }
       const summary = summarizeListingPrices(listings);
+      const ranked = object(search.sort) && search.sort['statgroup.0'] === 'desc';
       const context = estimateQueryContext(search);
       const confidence = estimateConfidence(context, summary.groups);
       if (summary.groups.some((group) => group.count < 5)) warnings.push('部分币种少于 5 个卖家，样本很少，区间仅供核对。');
-      if (found.total > ids.length) warnings.push('样本来自价格升序最前面的挂单，偏向市场低价，不能当作全市场中位数。');
+      if (ranked) warnings.push('取官方加权排序靠前的最多 20 件候选；排名只代表所选词缀与权重，不等同于流派实战最优。');
+      else if (found.total > ids.length) warnings.push('样本来自价格升序最前面的挂单，偏向市场低价，不能当作全市场中位数。');
       if (summary.groups.length > 1) warnings.push('不同币种分别统计，未使用汇率换算或混算。');
-      warnings.push(...confidence.reasons);
+      if (!ranked) warnings.push(...confidence.reasons);
       return {
         ok: true, total: Math.max(0, Math.floor(found.total)), fetched: listings.length,
         ...summary, sampledAt: new Date(now()).toISOString(), cached: false,
-        context, confidence, listings: representativeListings(listings),
+        context, ...(ranked ? {} : { confidence }), listings: representativeListings(listings, ranked),
         url: `${OFFICIAL}/trade2/search/poe2/${encodeURIComponent(league)}/${encodeURIComponent(found.id)}`, warnings,
       };
     } catch (error) {
@@ -245,9 +270,17 @@ const writeJson = (response: ServerResponse, status: number, value: unknown): vo
 
 export function createWorkbenchBridge(options: EstimateServiceOptions = {}) {
   const estimate = createEstimateService(options);
+  // Explicit desktop-to-browser views are separate from live tasks: opening a
+  // completed item must not replay a checkpoint or replace another price check.
+  const views = new Map<string, ClipboardPacket>();
+  const pruneViews = () => {
+    for (const [id, view] of views) if (Date.now() - Date.parse(view.createdAt) >= 20 * 60_000) views.delete(id);
+  };
   let latest: ClipboardPacket | null = null;
   let result: CompanionResult = { status: 'missing', message: '尚未收到装备。' };
   const clients = new Set<ServerResponse>();
+  const heartbeats = new Map<ServerResponse, ReturnType<typeof setInterval>>();
+  const excludedTask = new Map<ServerResponse, string>();
   let owner: ServerResponse | null = null;
   let deliveryToken = '';
   const packet = () => latest && Date.now() - Date.parse(latest.createdAt) < 20 * 60_000 ? latest : null;
@@ -256,16 +289,23 @@ export function createWorkbenchBridge(options: EstimateServiceOptions = {}) {
     const current = result.status === 'pending' ? packet() : null;
     return current ? { ...current, deliveryToken } : null;
   };
-  const emit = (response: ServerResponse) => response.write(`data: ${JSON.stringify({ item: deliverable() })}\n\n`);
+  const emit = (response: ServerResponse) => {
+    if (!response.destroyed && !response.writableEnded) response.write(`data: ${JSON.stringify({ item: latest && excludedTask.get(response) === latest.id ? null : deliverable() })}\n\n`);
+  };
   const selectOwner = (force = false) => {
-    const next = [...clients].reverse().find((client) => !client.destroyed) ?? null;
+    const next = [...clients].reverse().find((client) => !client.destroyed && !client.writableEnded && (!latest || excludedTask.get(client) !== latest.id)) ?? null;
     if (next !== owner || force) {
       owner = next;
       deliveryToken = randomUUID();
       if (owner && deliverable()) emit(owner);
     }
   };
-  const close = () => { for (const client of clients) client.end(); clients.clear(); };
+  const close = () => {
+    for (const timer of heartbeats.values()) clearInterval(timer);
+    heartbeats.clear(); owner = null;
+    const closing = [...clients]; clients.clear(); excludedTask.clear();
+    for (const client of closing) if (!client.writableEnded) client.end();
+  };
 
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     if (!validLoopbackRequest(request.headers, request.socket.remoteAddress)) {
@@ -277,17 +317,36 @@ export function createWorkbenchBridge(options: EstimateServiceOptions = {}) {
       if (route === '/api/workbench/health' && request.method === 'GET') {
         writeJson(response, 200, { ok: true, app: 'poe2-craft-workbench' }); return;
       }
+      if (route === '/api/workbench/companion-view' && request.method === 'POST') {
+        const parsed = validateClipboard(await jsonBody(request));
+        pruneViews();
+        while (views.size >= 20) views.delete(views.keys().next().value!);
+        const view = { id: randomUUID(), ...parsed, createdAt: new Date().toISOString() };
+        views.set(view.id, view);
+        writeJson(response, 200, { ok: true, id: view.id }); return;
+      }
+      if (route === '/api/workbench/companion-view' && request.method === 'GET') {
+        pruneViews();
+        const view = views.get(url.searchParams.get('id') ?? '');
+        if (!view) throw new WorkbenchRequestError(404, '这件查价装备已过期，请从快捷查价面板重新点击“在工坊查看”。');
+        writeJson(response, 200, { item: view }); return;
+      }
       if (route === '/api/workbench/clipboard/events' && request.method === 'GET') {
         if (clients.size >= 5) throw new WorkbenchRequestError(429, '已达到本地连接上限。');
         response.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform',
           Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
         response.flushHeaders(); clients.add(response);
-        if (deliverable()) selectOwner(); else emit(response);
-        const heartbeat = setInterval(() => { if (!response.destroyed) response.write(': keepalive\n\n'); }, 20_000);
-        response.on('close', () => {
-          clearInterval(heartbeat); clients.delete(response);
+        const cleanup = () => {
+          clearInterval(heartbeats.get(response)); heartbeats.delete(response); clients.delete(response); excludedTask.delete(response);
           if (owner === response) selectOwner();
-        });
+        };
+        response.once('close', cleanup); response.once('finish', cleanup); response.on('error', cleanup);
+        heartbeats.set(response, setInterval(() => {
+          if (response.destroyed || response.writableEnded) { cleanup(); return; }
+          response.write(': keepalive\n\n');
+        }, 20_000));
+        if (latest && views.has(url.searchParams.get('view') ?? '')) excludedTask.set(response, latest.id);
+        if (deliverable() && excludedTask.get(response) !== latest?.id) selectOwner(); else emit(response);
         return;
       }
       if (route === '/api/workbench/clipboard' && request.method === 'POST') {

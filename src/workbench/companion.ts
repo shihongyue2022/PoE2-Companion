@@ -10,6 +10,18 @@ function packetOf(value: unknown): CompanionPacket | null {
     ? row as unknown as CompanionPacket : null;
 }
 
+/** An explicit item link can reopen a completed price check without replaying its task. */
+export async function loadCompanionView(search: string, signal: AbortSignal): Promise<CompanionPacket | null> {
+  const id = new URLSearchParams(search).get('equipment');
+  if (!id) return null;
+  const response = await fetch(`/api/workbench/companion-view?id=${encodeURIComponent(id)}`, { signal });
+  if (!response.ok) throw new Error('这件查价装备已过期或工坊暂时无法连接，请从快捷查价面板重新点击“在工坊查看”。');
+  const value = await response.json() as { item?: unknown };
+  const packet = packetOf(value.item);
+  if (!packet) throw new Error('查价装备数据无效，请从快捷查价面板重新打开。');
+  return packet;
+}
+
 /** SSE keeps the in-game shortcut responsive while the browser tab is in the background. */
 export function subscribeCompanion(onPacket: (packet: CompanionPacket) => void): () => void {
   let last = '';
@@ -34,7 +46,8 @@ export function subscribeCompanion(onPacket: (packet: CompanionPacket) => void):
   };
   let events: EventSource | undefined;
   if (typeof EventSource !== 'undefined') {
-    events = new EventSource('/api/workbench/clipboard/events');
+    const viewId = new URLSearchParams(window.location.search).get('equipment');
+    events = new EventSource('/api/workbench/clipboard/events' + (viewId ? `?view=${encodeURIComponent(viewId)}` : ''));
     events.onmessage = (event) => {
       const raw: unknown = event.data;
       if (typeof raw !== 'string') return;

@@ -1,4 +1,6 @@
 import { createServer } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { EventEmitter } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildFlexibleTrade } from '../src/workbench/tradeSearch';
@@ -13,6 +15,30 @@ const json = (value: unknown, status = 200, headers: Record<string, string> = {}
 const item = (amount: number, currency = 'exalted', account = String(amount)) => ({ id: String(amount), listing: { price: { amount, currency }, account: { name: account } } });
 
 describe('official market estimate service', () => {
+  it('stops SSE heartbeats immediately on shutdown or finish before a socket close event', async () => {
+    vi.useFakeTimers();
+    try {
+      for (const termination of ['shutdown', 'finish']) {
+        const bridge = createWorkbenchBridge(); let ended = false;
+        const response = Object.assign(new EventEmitter(), {
+          destroyed: false, get writableEnded() { return ended; }, writeHead: vi.fn(), flushHeaders: vi.fn(),
+          write: vi.fn(() => { if (ended) throw new Error('write after end'); return true; }),
+          end: () => { ended = true; },
+        });
+        // Object.assign evaluates getters; model writableEnded as the real live property.
+        Object.defineProperty(response, 'writableEnded', { get: () => ended });
+        const request = { url: '/api/workbench/clipboard/events', method: 'GET', headers: { host: '127.0.0.1:5173' }, socket: { remoteAddress: '127.0.0.1' } };
+        await bridge.handle(request as IncomingMessage, response as unknown as ServerResponse);
+        expect(response.write).toHaveBeenCalledTimes(1);
+        if (termination === 'shutdown') bridge.close();
+        else { response.end(); response.emit('finish'); }
+        vi.advanceTimersByTime(60_000);
+        expect(response.write).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+        bridge.close();
+      }
+    } finally { vi.useRealTimers(); }
+  });
   it('makes one official search and at most two fetches of ten, coalesces and caches identical requests', async () => {
     const network = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(json({ id: 'search123', total: 300, result: Array.from({ length: 30 }, (_, i) => `id${i}`) }))
@@ -81,18 +107,50 @@ describe('official market estimate service', () => {
     expect(validateEstimate({ ...body, url: 'http://attacker.test', search: { ...search, sort: { price: 'desc' } } })).toEqual(body);
   });
 
-  it('allows official equipment categories while refusing currencies, maps and invented upstream paths', () => {
+  it('explains the official anonymous weighted-query restriction with an actionable login result', async () => {
+    const network = vi.fn<typeof fetch>().mockResolvedValue(json({ error: { code: 2,
+      message: 'Query is too complex. Logging in will increase this limit.' } }, 400));
+    expect(await createEstimateService({ fetch: network })(body)).toMatchObject({ ok: false, error: { kind: 'login', message: expect.stringContaining('登录官网') } });
+  });
+
+  it('preserves weighted market ordering and returns the full ranked candidate set', async () => {
+    const weighted = { ...body, search: { ...search, query: { ...search.query,
+      stats: [{ type: 'weight', disabled: false, filters: [{ id: 'explicit.stat_3299347043', value: { weight: 1 }, disabled: false }] }],
+    }, sort: { 'statgroup.0': 'desc' } } };
+    const offer = (id: number) => ({ ...item(100 - id, 'divine', `seller${id}`), id: `item${id}`,
+      item: { name: `Candidate ${id}`, baseType: 'Ruby Ring', explicitMods: [`+${100 - id} to maximum Life`] } });
+    const network = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(json({ id: 'ranked', total: 500, result: Array.from({ length: 20 }, (_, index) => `item${index}`) }))
+      .mockResolvedValueOnce(json({ result: Array.from({ length: 10 }, (_, index) => offer(index)) }))
+      .mockResolvedValueOnce(json({ result: Array.from({ length: 10 }, (_, index) => offer(index + 10)) }));
+    const result = await createEstimateService({ fetch: network })(weighted);
+    expect(JSON.parse(network.mock.calls[0]![1]!.body as string).sort).toEqual({ 'statgroup.0': 'desc' });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.listings).toHaveLength(20);
+      expect(result.listings![0]!.id).toBe('item0');
+      expect(result.warnings.join(' ')).not.toContain('价格升序');
+      expect(result.confidence).toBeUndefined();
+    }
+    const bad = { ...weighted, search: { ...weighted.search, query: { ...weighted.search.query,
+      stats: [{ type: 'weight', filters: [{ id: 'explicit.stat_3299347043', value: { weight: -1 } }] }],
+    } } };
+    expect(() => validateEstimate(bad)).toThrow('权重');
+  });
+
+  it('allows all verified item categories while refusing invented categories and upstream paths', () => {
     const requestFor = (category: string) => ({ ...body, search: { ...search, query: { ...search.query,
       filters: { ...search.query.filters, type_filters: { filters: { category: { option: category }, rarity: { option: 'unique' } } } },
     } } });
     for (const category of ['accessory.belt', 'armour.helmet', 'armour.chest', 'armour.gloves', 'armour.boots',
       'armour.shield', 'armour.buckler', 'armour.focus', 'armour.quiver', 'weapon.wand', 'weapon.staff', 'weapon.bow',
       'weapon.crossbow', 'weapon.spear', 'weapon.onemace', 'weapon.twomace', 'weapon.warstaff', 'weapon.sceptre',
-      'weapon.talisman', 'jewel', 'flask.life', 'flask.mana', 'flask.charm', 'sanctum.relic']) {
+      'weapon.talisman', 'jewel', 'flask.life', 'flask.mana', 'flask.charm', 'sanctum.relic',
+      'currency', 'currency.rune', 'currency.omen', 'gem', 'gem.supportgem', 'map.waystone', 'map.tablet', 'map.barya', 'map.ultimatum', 'map.logbook']) {
       expect(validateEstimate(requestFor(category))).toEqual(requestFor(category));
     }
-    for (const category of ['currency', 'map.waystone', 'weapon../http://attacker.test', 'invented']) {
-      expect(() => validateEstimate(requestFor(category))).toThrow('装备类别');
+    for (const category of ['weapon../http://attacker.test', 'invented']) {
+      expect(() => validateEstimate(requestFor(category))).toThrow('物品类别');
     }
     expect(() => validateEstimate({ ...body, search: { ...search, query: { ...search.query, name: 'name\0injected' } } })).toThrow();
   });
@@ -135,6 +193,49 @@ describe('local desktop bridge', () => {
 
   const cleanups: (() => void)[] = [];
   afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); });
+
+  it('opens exact saved equipment independently of live tasks and expires bounded view history', async () => {
+    const bridge = createWorkbenchBridge();
+    const server = createServer((req, res) => { void bridge.handle(req, res); });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    cleanups.push(() => { bridge.close(); server.closeAllConnections(); server.close(); });
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/workbench`;
+    const post = async (path: string, value: unknown) => fetch(`${base}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+    const task = await (await post('clipboard', { raw: 'Rarity: Rare\nCrafting Ring', mode: 'checkpoint' })).json() as { id: string };
+    const source = await (await fetch(`${base}/clipboard`)).json() as { item: { deliveryToken: string } };
+    await post('companion-result', { id: task.id, deliveryToken: source.item.deliveryToken, status: 'ready', message: '锚点已核对' });
+    const raw = '稀有度: 稀有\n不敗亡者\n宏偉華服\n--------\n物品等級: 80';
+    const view = await (await post('companion-view', { raw, mode: 'trade' })).json() as { id: string };
+    expect(await (await fetch(`${base}/companion-view?id=${view.id}`)).json()).toMatchObject({ item: { id: view.id, raw, mode: 'trade' } });
+    expect(await (await fetch(`${base}/companion-result?id=${task.id}`)).json()).toMatchObject({ status: 'ready', message: '锚点已核对' });
+    expect(await (await fetch(`${base}/clipboard`)).json()).toEqual({ item: null });
+    expect((await post('companion-view', { raw: 'not equipment', mode: 'trade' })).status).toBe(400);
+    for (let index = 0; index < 20; index++) await post('companion-view', { raw: `Rarity: Rare\nItem ${index}`, mode: 'trade' });
+    expect((await fetch(`${base}/companion-view?id=${view.id}`)).status).toBe(404);
+    const expiring = await (await post('companion-view', { raw, mode: 'trade' })).json() as { id: string };
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 20 * 60_000 + 1000);
+    try { expect((await fetch(`${base}/companion-view?id=${expiring.id}`)).status).toBe(404); }
+    finally { clock.mockRestore(); }
+  });
+
+  it('keeps an explicit equipment view from taking over an older task while allowing new hotkeys', async () => {
+    const bridge = createWorkbenchBridge();
+    const server = createServer((req, res) => { void bridge.handle(req, res); });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    cleanups.push(() => { bridge.close(); server.closeAllConnections(); server.close(); });
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/workbench`;
+    const post = async (path: string, value: unknown) => fetch(`${base}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+    const oldTask = await (await post('clipboard', { raw: 'Rarity: Rare\nOld Ring', mode: 'checkpoint' })).json() as { id: string };
+    const view = await (await post('companion-view', { raw: 'Rarity: Rare\nViewed Armour', mode: 'trade' })).json() as { id: string };
+    const stream = await fetch(`${base}/clipboard/events?view=${view.id}`);
+    const reader = stream.body!.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain('"item":null');
+    expect(await (await fetch(`${base}/companion-result?id=${oldTask.id}`)).json()).toMatchObject({ status: 'pending' });
+    const next = await (await post('clipboard', { raw: 'Rarity: Rare\nNew Bow', mode: 'trade' })).json() as { id: string };
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain(next.id);
+    await reader.cancel();
+  });
 
   it('exchanges packets, result summaries and SSE events without retaining old tasks', async () => {
     const bridge = createWorkbenchBridge();

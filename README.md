@@ -2,7 +2,7 @@
 
 > **本地个人改版：PoE2 制作工坊**
 >
-> 双击 `start-workbench.cmd` 启动全装备查价、角色装备栏与中文戒指／项链制作工作台。后台服务就绪后会打开网页和快捷键助手；关闭启动窗口不影响服务。使用说明、当前功能与数据版本边界请先阅读 [WORKBENCH.md](WORKBENCH.md)。下面保留原项目说明以记录上游来源；其中线上服务与长期功能不代表本地版本全部支持。
+> 双击 `start-workbench.cmd` 启动全物品查价、角色装备栏与中文戒指／项链制作工作台。支持装备、地图、碑牌、宝石、通货和材料查价，游戏内按 `Alt + E`。后台服务就绪后会打开网页和快捷键助手；关闭启动窗口不影响服务。使用说明、当前功能与数据版本边界请先阅读 [WORKBENCH.md](WORKBENCH.md)。下面保留原项目说明以记录上游来源；其中线上服务与长期功能不代表本地版本全部支持。
 >
 > 本地改版仓库：[shihongyue2022/PoE2-Craft-Workbench](https://github.com/shihongyue2022/PoE2-Craft-Workbench)。原作者仓库保留为 Git `upstream`，本仓库为 `origin`。
 

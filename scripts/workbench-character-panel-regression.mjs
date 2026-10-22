@@ -1,0 +1,48 @@
+import { chromium, expect } from '@playwright/test';
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+
+const base = process.env.WORKBENCH_URL ?? 'http://127.0.0.1:4174';
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
+const errors = [];
+page.on('pageerror', (error) => errors.push(error.message));
+const ring = (fire = 25, life = 70) => `Item Class: Rings\nRarity: Rare\nPanel Test Ring\nGold Ring\n--------\nItem Level: 82\n--------\n+${life} to maximum Life\n+${fire}% to Fire Resistance`;
+await mkdir('artifacts/workbench', { recursive: true });
+try {
+  await page.goto(base);
+  await page.getByRole('navigation', { name: '工作区域' }).getByRole('button', { name: '角色装备' }).click();
+  const loadout = page.getByRole('region', { name: '角色全身装备' });
+  await loadout.getByLabel('选择装备栏位').selectOption('ring1');
+  await loadout.getByLabel('导入此栏装备').fill(ring());
+  await loadout.getByRole('button', { name: '放入左戒指' }).click();
+  await loadout.locator('.lo-calibration summary').click();
+  await loadout.getByLabel('导入角色面板记录').setInputFiles('artifacts/workbench/character-panel-screenshot.json');
+  await expect(loadout.getByLabel('角色面板能量护盾')).toHaveValue('4898');
+  await expect(loadout.getByLabel('角色面板火焰抗性')).toHaveValue('189');
+  await loadout.getByRole('button', { name: '保存当前游戏面板基准' }).click();
+  await loadout.locator('.lo-calibration summary').click();
+  const table = loadout.locator('.lo-calibration table');
+  await expect(table.getByRole('row', { name: /能量护盾/ })).toContainText('1398');
+  await expect(table.getByRole('row', { name: /能量护盾/ })).toContainText('4898');
+  console.log('PASS screenshot record imports item and final character values as separate columns');
+  await loadout.getByLabel('粘贴候选装备').fill(ring(5));
+  await expect(loadout.getByText('已比较属性持平', { exact: true })).toBeVisible();
+  await expect(loadout.getByText(/有效 75% → 75%；总值 189% → 169%/)).toBeVisible();
+  console.log('PASS dropping excess fire resistance preserves 75% effective resistance');
+  await page.reload();
+  await page.getByRole('navigation', { name: '工作区域' }).getByRole('button', { name: '角色装备' }).click();
+  await loadout.getByLabel('选择装备栏位').selectOption('ring1');
+  await loadout.locator('.lo-calibration summary').click();
+  await expect(loadout.getByLabel('角色面板能量护盾')).toHaveValue('4898');
+  await loadout.getByLabel('粘贴候选装备').fill(ring(5));
+  await expect(loadout.getByText('已比较属性持平', { exact: true })).toBeVisible();
+  await loadout.screenshot({ path: 'artifacts/workbench/character-panel-calibration.png' });
+  await loadout.getByRole('button', { name: '采用候选并替换左戒指' }).click();
+  await expect(loadout.getByText('装备已变化 · 需要核对', { exact: true })).toBeVisible();
+  console.log('PASS baseline survives reload and is invalidated after adopting a new item');
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 1);
+  assert.deepEqual(errors, []);
+  console.log('PASS calibration works at 390px without uncaught browser errors');
+} finally { await browser.close(); }

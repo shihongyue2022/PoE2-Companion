@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { indexPatch } from '../../packages/engine/src/indexPatch';
@@ -56,9 +56,37 @@ async function ready() {
 }
 
 describe('workbench target-source regression', () => {
+  afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState({}, '', '/'); });
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+  });
+
+  it('opens the exact equipment linked by the desktop button without replacing the crafting session', async () => {
+    restore();
+    window.history.replaceState({}, '', '/?companion=1&equipment=saved-armour');
+    const network = vi.fn<typeof fetch>().mockImplementation((input) => {
+      if (typeof input === 'string' && input.startsWith('/api/workbench/companion-view?id=')) return Promise.resolve(new Response(JSON.stringify({ item: {
+        id: 'saved-armour', raw: BOOTS_SAMPLE, mode: 'trade', createdAt: new Date().toISOString(),
+      } })));
+      return Promise.resolve(new Response('{}', { status: 503 }));
+    });
+    vi.stubGlobal('fetch', network);
+    const before = savedSession();
+    const { container } = render(<WorkbenchApp />);
+    expect(await screen.findByText('Dusk Trail')).toBeVisible();
+    expect(container.querySelector('.wb-layout')).toHaveClass('is-equipment');
+    expect(savedSession()).toMatchObject(before);
+    expect(computeWorkbench).not.toHaveBeenCalled();
+    expect(network.mock.calls.some(([input]) => input === '/api/workbench/companion-result')).toBe(false);
+  });
+
+  it('explains an expired equipment link instead of silently showing a different item', async () => {
+    restore();
+    window.history.replaceState({}, '', '/?equipment=expired');
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response('{}', { status: 404 })));
+    await ready();
+    expect(await screen.findByText(/这件查价装备已过期或工坊暂时无法连接/)).toBeVisible();
   });
 
   it('routes copied armour into all-equipment pricing without changing the crafting item or its source text', async () => {
@@ -66,8 +94,8 @@ describe('workbench target-source regression', () => {
     restore([{ modId: ORDINARY_ID, tierDisplay: 3 }]);
     const { container } = await ready();
     const before = localStorage.getItem(STORAGE_KEY);
-    await user.click(screen.getByRole('button', { name: /粘贴游戏装备/ }));
-    await user.click(screen.getByRole('textbox', { name: '游戏装备文本' }));
+    await user.click(screen.getByRole('button', { name: /粘贴游戏物品/ }));
+    await user.click(screen.getByRole('textbox', { name: '游戏物品文本' }));
     await user.paste(BOOTS_SAMPLE);
     expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
     await user.click(screen.getByRole('button', { name: /识别并导入/ }));

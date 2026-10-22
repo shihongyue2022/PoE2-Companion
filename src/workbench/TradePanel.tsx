@@ -27,6 +27,7 @@ interface TradePanelProps {
   priceLeague?: string;
   autoEstimate?: boolean;
   onEstimate?: PriceEstimateProps['onEstimate'];
+  onAllT1?: () => void;
 }
 
 const numberText = (value: number) => String(Math.round(value * 100) / 100);
@@ -101,7 +102,7 @@ function TradeContext(props: TradePanelProps) {
   </div>;
 }
 
-function TradeSearchEditor({ data, tradeData, item, baseName, league, initialRows, warnings, source, autoEstimate, onEstimate }: TradePanelProps & {
+function TradeSearchEditor({ data, tradeData, item, baseName, league, initialRows, warnings, source, autoEstimate, onEstimate, onAllT1, raw, actualRollsInvalid }: TradePanelProps & {
   initialRows: readonly TradeFilterRow[]; warnings: readonly string[]; source: SearchSource;
 }) {
   const [rows, setRows] = useState(() => presetRows(initialRows, data, 'similar'));
@@ -168,6 +169,7 @@ function TradeSearchEditor({ data, tradeData, item, baseName, league, initialRow
         ['strict', source === 'current' ? '全部实际属性' : '全部目标属性', '逐条匹配 · 不设数值上限'],
         ['top', '找同类顶配', '沿用属性方向 · 提高数值门槛'],
       ] as const).map(([value, title, description]) => <button className={preset === value ? 'active' : ''} key={value} aria-pressed={preset === value} disabled={value === 'top' && !initialRows.length} onClick={() => applyPreset(value)}><strong>{title}</strong><small>{description}</small></button>)}</div>
+      {onAllT1 && source === 'current' && <div className="wb-actions"><button type="button" className="wb-button" disabled={!raw.trim() || actualRollsInvalid} onClick={onAllT1}>同类全词缀 T1</button><span className="wb-fine">全部原词缀方向同时满足 T1 参考门槛；保留制作方案。</span></div>}
       <p className="wb-fine">核心项按生命／魔力、总抗性、伤害等属性挑选，供你调整，不代表市场估价。未勾选的属性不会限制搜索。</p>
     </>}
     {source !== 'base' && topMode && <div className="wb-trade-top" aria-label="同类顶配设置">
@@ -202,7 +204,7 @@ function TradeSearchEditor({ data, tradeData, item, baseName, league, initialRow
     <div className="wb-trade-summary" aria-live="polite"><strong>{exactBase ? translateBase(baseName) : item.baseId === 'Rings' ? '全部戒指' : '全部项链'}</strong><span>{limitLevel ? `物等 ${levelMin || '不限'}～${levelMax || '不限'}` : '不限物等'}</span><span>{{ nonunique: '非传奇', normal: '普通', magic: '魔法', rare: '稀有' }[rarity]}</span><span>{activeCount ? `${activeCount} 项属性${matching === 'count' ? `中至少 ${minMatches} 项` : '全部匹配'}` : '不限词缀'}</span><span>{preset === 'custom' ? '自定义条件' : source === 'base' ? '底材搜索' : '可继续调整'}</span></div>
     {error && <p className="wb-inline-warning" role="alert">{error}</p>}
     {search && <a className="wb-button primary wb-trade-link" href={search.url} target="_blank" rel="noreferrer">在官方交易网站搜索 ↗</a>}
-    {search && <PriceEstimate query={search.query} url={search.url} league={league} auto={autoEstimate} onEstimate={onEstimate} />}
+    {search && <PriceEstimate query={search.query} url={search.url} league={league} auto={autoEstimate} onEstimate={onEstimate} itemRaw={source === 'current' && !actualRollsInvalid ? raw : undefined} memoryTitle={`${translateBase(baseName)} · ${{ current: '当前装备', target: '制作目标', base: '底材' }[source]}`} />}
     <p className="wb-fine">结果较少时，先用“宽松比较”，再取消非核心词缀；也可以改为至少匹配 2 项。这里只生成查询，实际挂单及价格以官方交易页为准。</p>
     {search && <details className="wb-diagnostic"><summary>查看发往官网的搜索条件</summary><pre>{JSON.stringify(search.query, null, 2)}</pre></details>}
   </>;

@@ -60,8 +60,8 @@ describe('editable official trade comparison panel', () => {
     expect(document.query.type).toBeUndefined();
     expect(document.query.filters.misc_filters).toBeUndefined();
     expect(document.query.status.option).toBe('any');
-    expect(document.query.filters.type_filters.filters.category.option).toBe('accessory.ring');
-    expect(document.query.filters.type_filters.filters.rarity.option).toBe('nonunique');
+    expect(document.query.filters.type_filters.filters.category?.option).toBe('accessory.ring');
+    expect(document.query.filters.type_filters.filters.rarity?.option).toBe('nonunique');
     const link = screen.getByRole('link', { name: /在官方交易网站搜索/ });
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noreferrer');
@@ -143,7 +143,7 @@ describe('editable official trade comparison panel', () => {
     expect(query().query.stats.flatMap((group) => group.filters).every((filter) => filter.value === undefined)).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: '清空属性条件' }));
     expect(query().query.stats.flatMap((group) => group.filters)).toEqual([]);
-    expect(query().query.filters.type_filters.filters.category.option).toBe('accessory.ring');
+    expect(query().query.filters.type_filters.filters.category?.option).toBe('accessory.ring');
     expect(container.querySelectorAll('.wb-trade-filter input[type="checkbox"]:checked')).toHaveLength(0);
   });
 
