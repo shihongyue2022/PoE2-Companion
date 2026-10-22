@@ -33,7 +33,7 @@ export default function BuildAdvicePanel({ state, selected, onSearch, onClear }:
       {item ? ` · ${present.has(priority.family) ? '当前可识别属性中已读到' : '当前可识别属性中未读到，候选可重点核对'}` : ''}<br /><span className="lo-footnote">{priority.reason}</span></li>)}</ul>
       : <p>药剂与护符的条件效果暂不使用常驻装备权重，需要结合实际战斗与触发条件核对。</p>}
     <p className="lo-footnote">原 BD 缺少完整装备与战斗配置，不能计算精确属性需求、触发覆盖率、实际伤害增幅或“毕业”预算。未识别词缀不等于没有收益；抗性最低要求仍由角色目标控制。</p>
-    <p className="lo-footnote">综合搜索对当前装备已识别的数值属性分配权重；当前装备没有的新属性不会自动加入综合分，请按建议在官网补充条件核对。</p>
+    <p className="lo-footnote">使用四抗伤害目标时，搜索会从匹配底座的词池补充主输出相关的潜在属性；旧装备没有的词缀也能参与候选评分。未核对的机制不当作已计算的 DPS。</p>
     {!!profile.warnings.length && <details><summary>参考数据核对提示</summary><ul>{profile.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></details>}
     </details>{warnings.map((warning) => <p className="lo-alert" key={warning}>{warning}</p>)}<div className="lo-actions"><button className="wb-button" disabled={!item || !priorities.length} onClick={onSearch}>按 BD 方向寻找本栏升级</button>
       <button className="wb-text-button" onClick={onClear}>清除 BD 方向</button></div>

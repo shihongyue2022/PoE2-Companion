@@ -2,12 +2,13 @@ import { emptyLoadout, equipRaw, slotLabel, type LoadoutSlot, type LoadoutState 
 import { equipmentDisplayName, parseEquipment } from './genericEquipment';
 import type { PobSource } from './loadoutSource';
 import { equipmentSignature } from './characterPanel';
+import { parsePobCombat } from './pobCombat';
 
 const MAX_XML = 3_000_000;
 const MAX_CODE = 1_500_000;
 export interface PobItem { id: string; raw: string; warnings: string[] }
 export interface PobSet { id: string; title: string; secondWeapons: boolean; slots: { name: string; itemId: string }[] }
-export interface PobDocument { items: Record<string, PobItem>; sets: PobSet[]; activeSet: string; profile?: Pick<PobSource, 'className' | 'ascendancy' | 'level' | 'version' | 'reference'> }
+export interface PobDocument { items: Record<string, PobItem>; sets: PobSet[]; activeSet: string; profile?: Pick<PobSource, 'className' | 'ascendancy' | 'level' | 'version' | 'reference' | 'combat'> }
 export interface PobPreview { slots: LoadoutState['slots']; imported: string[]; warnings: string[] }
 const slotMap: Record<string, LoadoutSlot> = {
   'Weapon 1': 'mainHand', 'Weapon 2': 'offHand', Helmet: 'helmet', 'Body Armour': 'body',
@@ -146,10 +147,20 @@ export function parsePobXml(xml: string): PobDocument {
       if (cap !== undefined && Number.isFinite(cap) && cap >= 0 && cap <= 100) ref.caps[key] = cap;
       const effective = stats.get(`${stat}Resist`);
       if (effective !== undefined && Number.isFinite(effective) && effective >= -200 && effective <= 100) ref.effective![key] = effective;
+      const overflow = stats.get(`${stat}ResistOverCap`), missing = stats.get(`Missing${stat}Resist`);
+      // PoB CalcDefence saves max(0,total-max). Positive overflow proves saturation;
+      // a separate Missing stat can identify the cap for an unsaturated resistance.
+      if (effective !== undefined && Number.isFinite(effective) && effective >= 0 && effective <= 100
+        && overflow !== undefined && Number.isFinite(overflow) && overflow >= 0 && overflow <= 1000) {
+        if (ref.caps[key] === undefined && overflow > 0) ref.caps[key] = effective;
+        if (ref.caps[key] === undefined && missing !== undefined && Number.isFinite(missing) && missing >= 0 && effective + missing <= 100) ref.caps[key] = effective + missing;
+        if (ref.values[key] === undefined && (overflow > 0 || ref.caps[key] !== undefined)) ref.values[key] = overflow > 0 ? ref.caps[key]! + overflow : effective;
+      }
     }
     const dps = stats.get('FullDPS'); if (dps !== undefined && Number.isFinite(dps) && dps >= 0 && dps <= 1e15) ref.fullDps = dps;
     if (Object.keys(ref.values).length || Object.keys(ref.effective!).length || ref.fullDps !== undefined) profile.reference = ref;
   }
+  profile.combat = parsePobCombat(document.documentElement);
   return { items, sets: parsed, activeSet: container.getAttribute('activeItemSet') ?? parsed[0]!.id, profile };
 }
 
@@ -157,6 +168,7 @@ export function pobImportSource(document: PobDocument, setId: string, secondWeap
   const set = document.sets.find((entry) => entry.id === setId)!;
   const current = set.id === document.activeSet && secondWeapons === set.secondWeapons;
   return { kind: 'pob', importedAt: new Date().toISOString(), ...document.profile,
+    combat: document.profile?.combat ? { ...document.profile.combat, matchesEquipment: current } : undefined,
     reference: current ? document.profile?.reference : undefined, fileName: file?.name, savedAt: file?.modifiedAt,
     setId, setTitle: set.title.slice(0, 300), secondWeapons, equipmentSignature: equipmentSignature(slots), warnings: warnings.slice(0, 50).map((warning) => warning.slice(0, 500)) };
 }

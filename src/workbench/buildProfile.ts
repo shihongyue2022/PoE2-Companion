@@ -25,6 +25,7 @@ export interface BuildProfile {
   priorities: { family: BuildFamily; weight: number; reason: string }[];
   metrics: MetricKey[]; constraints: BuildAnalysis['constraints'];
   matchedPassives: number; unknownPassives: number; warnings: string[];
+  offense?: { cannotCrit: boolean };
 }
 export function isBuildMainSkill(skill: BuildSkill): boolean {
   return skill.known && !skill.tags.includes('persistent') && !skill.tags.includes('buff')
@@ -53,7 +54,8 @@ export function readBuildProfile(value: unknown): BuildProfile | undefined {
       known: true, tags: [...main.tags as string[]], supports: (main.supports as BuildSkill['supports']).map((support) => ({ id: support.id, label: support.label, known: support.known })),
       ...(short(main.weapon) ? { weapon: main.weapon } : {}) }, priorities: (value.priorities as BuildProfile['priorities']).map((priority) => ({ ...priority })),
     metrics: [...new Set(value.metrics as MetricKey[])], constraints: { emptyOffhand: constraints.emptyOffhand as boolean, helmetEsEvasion: constraints.helmetEsEvasion as boolean, gemColours: constraints.gemColours as boolean, manaBeforeLife: constraints.manaBeforeLife as boolean },
-    matchedPassives: value.matchedPassives, unknownPassives: value.unknownPassives, warnings: [...value.warnings] };
+    matchedPassives: value.matchedPassives, unknownPassives: value.unknownPassives, warnings: [...value.warnings],
+    ...(record(value.offense) && typeof value.offense.cannotCrit === 'boolean' ? { offense: { cannotCrit: value.offense.cannotCrit } } : {}) };
 }
 
 export function profileForSkill(analysis: BuildAnalysis, key: string): BuildProfile | undefined {
@@ -76,5 +78,6 @@ export function profileForSkill(analysis: BuildAnalysis, key: string): BuildProf
     : ['life', 'mana', 'energyShield', 'evasion', 'armour', 'movementSpeed'].includes(family) ? [family as MetricKey] : []);
   return { version: 1, fileName: analysis.fileName, name: analysis.name, modifiedAt: analysis.modifiedAt, ascendancy: analysis.ascendancy,
     level: analysis.level, weaponSet: analysis.weaponSet, main, priorities, metrics, constraints: analysis.constraints,
-    matchedPassives: analysis.matchedPassives, unknownPassives: analysis.unknownPassives, warnings: analysis.warnings };
+    matchedPassives: analysis.matchedPassives, unknownPassives: analysis.unknownPassives, warnings: analysis.warnings,
+    offense: { cannotCrit: analysis.keystones.some((entry) => entry.text.some((line) => /^(?:Never deal Critical (?:Hits|Strikes)|You cannot deal Critical (?:Hits|Strikes)|Your Hits (?:can never|cannot) be Critical)/i.test(line))) } };
 }

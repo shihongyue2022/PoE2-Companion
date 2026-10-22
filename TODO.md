@@ -1,5 +1,12 @@
 # Backlog
 
+## 本地工坊流程整合（2026-10-23）
+
+- 已统一导入角色、确认主输出、校准四抗、搜索升级、比较候选的入口与默认推荐条件。
+- 已打通本次搜索权重到换装比较的传递，角色或目标变化时自动失效并重新生成依据。
+- 已整合 PoB2 技能与伤害构成、英文词缀识别、资料对照及自动 roll 档位；显示映射为简体中文。
+- 待完成：接入完整 PoB2 候选换装重算，验证实际主技能 DPS；当前方向分不代替伤害模拟。
+
 Ordered by value. Update this file in the same commit that closes an item — see `.claude/skills/ship`.
 
 Last reviewed: 2026-09-01 — sections 7–17 are that review; see the note above them.

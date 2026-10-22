@@ -27,7 +27,7 @@ export default function LoadoutSourcePanel({ state }: { state: LoadoutState }) {
         <p className="lo-footnote">这些是 PoB2 保存时的计算结果，受其天赋、技能和配置影响；不是游戏实测面板，也不会随工坊换装自动重算。换装判断仍使用装备差值与单独录入的游戏面板。</p>
         <div className="lo-total-grid">{METRICS.filter((metric) => source.reference!.values[metric.key] !== undefined).map((metric) => <div key={metric.key}><span>{metric.label}{metric.key.endsWith('Resistance') ? '未封顶总值' : ''}</span><strong>{source.reference!.values[metric.key]!.toLocaleString('zh-CN')}{metric.unit}</strong></div>)}</div>
         {Object.entries(source.reference.effective ?? {}).map(([key, value]) => <p className="lo-footnote" key={key}>{METRICS.find((metric) => metric.key === key)?.label}有效值（PoB2）：{value}%（与未封顶总值分开显示）</p>)}
-        {source.reference.fullDps !== undefined && <p className="lo-footnote">保存时 PoB2 Full DPS：{Math.round(source.reference.fullDps).toLocaleString('zh-CN')}（工坊不计算换装后的技能 DPS）</p>}
+        {source.reference.fullDps !== undefined && <p className="lo-footnote">保存时 PoB2 全技能汇总：{source.reference.fullDps > 0 ? Math.round(source.reference.fullDps).toLocaleString('zh-CN') : '未计入汇总（不表示角色伤害为零）'}。主技能及命中／持续伤害请展开“技能与构成”。</p>}
       </details>}
     </section>}
     {state.previous && <details className="lo-backup"><summary>最近一次整套更新对照</summary><LoadoutChangePreview before={{ ...emptyLoadout(), slots: state.previous.slots }} after={state} /></details>}

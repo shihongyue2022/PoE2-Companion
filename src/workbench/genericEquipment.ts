@@ -1,6 +1,7 @@
 import source from './data/equipment-index.json';
 import tradeItems from './data/trade-item-index.json';
 import displayVocabulary from './data/equipment-display.json';
+import { poe2dbStatReference, poe2dbUnmappedStat } from './poe2dbReference';
 
 export type EquipmentSlot = 'weapon' | 'offhand' | 'helmet' | 'body' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'belt' | 'jewel' | 'flask' | 'charm' | 'relic' | 'other';
 export interface EquipmentProperty { name: string; label: string; values: number[]; text: string }
@@ -8,6 +9,7 @@ export interface EquipmentMod {
   key: string; raw: string; text: string; label: string; ids: string[]; values: number[];
   searchable: boolean; value?: number; warning?: string; ref?: string; statId?: string;
   affixType?: 'prefix' | 'suffix';
+  recognized?: boolean; referenceUrl?: string; englishText?: string;
 }
 export interface Equipment {
   raw: string; name: string; baseName: string; baseNameEnglish?: string; nameEnglish?: string;
@@ -34,9 +36,9 @@ export const EQUIPMENT_TRADE_CATEGORIES: readonly string[] = index.categories;
 export const ITEM_KIND_LABELS = { equipment: '装备', waystone: '换界石（地图）', tablet: '碑牌', map: '终局物品', currency: '通货 / 材料', gem: '宝石', other: '其他物品' };
 export const itemKindLabel = (item: Equipment): string => ITEM_KIND_LABELS[item.kind ?? 'equipment'];
 /** Verified placements of the same scalar, so upgrades need not share a fracture or implicit source. */
-export function equipmentStatAliases(ref: string, original: readonly string[]): string[] {
+export function equipmentStatAliases(ref: string, original: readonly string[], extraPlacements: readonly string[] = []): string[] {
   const hashes = new Set(original.map((id) => id.split('.').pop()));
-  const placements = new Set(['explicit', 'fractured', 'desecrated', ...original.map((id) => id.split('.')[0])]);
+  const placements = new Set(['explicit', 'fractured', 'desecrated', ...extraPlacements, ...original.map((id) => id.split('.')[0])]);
   return [...new Set(index.stats.filter((stat) => stat.ref === ref).flatMap((stat) => Object.values(stat.ids).flat()))]
     .filter((id) => hashes.has(id.split('.').pop()) && placements.has(id.split('.')[0]));
 }
@@ -131,29 +133,50 @@ function parseMod(raw: string, key: string, originHint?: string): EquipmentMod {
     return match ? [{ ...entry, values: match.slice(1).map(Number) }] : [];
   });
   const refs = new Set(matches.map((m) => m.stat.ref));
+  const reference = poe2dbUnmappedStat(simplifyEquipmentText(text));
+  if (!matches.length && reference) return { key, raw, text, ...reference, englishText: reference.ref, recognized: true,
+    ids: [], values: [], searchable: false,
+    warning: '已按 PoE2DB 确认是赋予技能标记；当前官方交易索引没有独立筛选，不将游戏内部编号当作交易编号。' };
   if (!matches.length || refs.size > 1) return { key, raw, text,
     label: text.includes('[PoB数值待游戏文本核对]')
       ? `${parseMod(text.replace(/\s*\[PoB数值待游戏文本核对\]/g, ''), 'display-only').label} [PoB数值待游戏文本核对]`
       : displayOnlyStat(text), ids: [], values: numbers(text), searchable: false,
-    warning: matches.length ? '存在多种属性含义，未自动加入交易条件。' : '未匹配官方交易属性；保留原文，请在官网核对。' };
+    warning: text.includes('[PoB数值待游戏文本核对]') ? '此词缀带有 PoB 导入待核对标记，尚未用于数值搜索；可读取原始 PoB2 重新识别，不等于该词缀没有官方映射。'
+      : matches.length ? '存在多种属性含义，未自动加入交易条件。' : '未匹配官方交易属性；保留原文，请在官网核对。' };
   const found = matches[0]!;
   const kind = origin(raw) ?? originHint;
-  const selectedIds = kind ? found.stat.ids[kind] ?? [] : found.stat.ids.explicit ?? found.stat.ids.sanctum ?? found.stat.ids.implicit ?? [];
+  // Granted skills use an official namespace independent of affix placement.
+  const selectedIds = found.stat.ids.skill ?? (kind ? found.stat.ids[kind] ?? [] : found.stat.ids.explicit ?? found.stat.ids.sanctum ?? found.stat.ids.implicit ?? []);
   // Alternate placements of the same scalar are OR aliases, never independent required filters.
   const ids = [...new Set(kind ? selectedIds : [...selectedIds, ...(found.stat.ids.fractured ?? []), ...(found.stat.ids.desecrated ?? [])])];
   const values = found.values.length ? found.values : found.matcher.value === undefined || !found.stat.ref.includes('#') ? [] : [found.matcher.value];
   const damageRange = /^Adds # to # .+ Damage/i.test(found.stat.ref);
   const scalar = values.length === 1 ? values[0]! * (found.matcher.negate ? -1 : 1)
     : values.length === 2 && damageRange ? (values[0]! + values[1]!) / 2 * (found.matcher.negate ? -1 : 1) : undefined;
-  const chinese = found.stat.matchers.find((matcher) => /[\u3400-\u9fff]/u.test(matcher.string)
+  const englishVariants = found.stat.matchers.filter((matcher) => !/[\u3400-\u9fff]/u.test(matcher.string));
+  const chineseVariants = found.stat.matchers.filter((matcher) => /[\u3400-\u9fff]/u.test(matcher.string));
+  // Constant variants can share the same trade ID/value while describing different
+  // ground combinations. Keep the matching bilingual variant, not the first one.
+  const variant = !found.stat.ref.includes('#') && englishVariants.length === chineseVariants.length
+    ? chineseVariants[englishVariants.indexOf(found.matcher)] : undefined;
+  const chinese = variant ?? found.stat.matchers.find((matcher) => /[\u3400-\u9fff]/u.test(matcher.string)
     && Boolean(matcher.negate) === Boolean(found.matcher.negate)
     && (matcher.string.match(/#/g)?.length ?? 0) === found.values.length);
+  const englishMatcher = !/[\u3400-\u9fff]/u.test(found.matcher.string) ? found.matcher
+    : englishVariants.length === chineseVariants.length ? englishVariants[chineseVariants.indexOf(found.matcher)]
+      : englishVariants.find((matcher) => Boolean(matcher.negate) === Boolean(found.matcher.negate)
+        && (matcher.string.match(/#/g)?.length ?? 0) === found.values.length);
+  let englishPosition = 0;
+  const englishText = englishMatcher?.string.replace(/#/g, () => String(found.values[englishPosition++] ?? '#'));
   let position = 0;
-  const label = !/[\u3400-\u9fff]/u.test(text) && chinese && (found.values.length <= 1 || damageRange)
+  const label = !/[\u3400-\u9fff]/u.test(text) && chinese
     ? simplifyEquipmentText(chinese.string.replace(/#/g, () => String(found.values[position++]))) : simplifyEquipmentText(text);
-  return { key, raw, text, label, ids, values, searchable: ids.length > 0,
+  return { key, raw, text, label, ids, values, searchable: ids.length > 0, recognized: true,
+    ...(englishText && !englishText.includes('#') ? { englishText } : {}),
+    ...(poe2dbStatReference(found.stat.id) ? { referenceUrl: poe2dbStatReference(found.stat.id) } : {}),
     ...(scalar === undefined ? {} : { value: scalar }), ref: found.stat.ref, ...(found.stat.id ? { statId: found.stat.id } : {}),
     ...(!ids.length ? { warning: '此来源没有已核对的官方交易条件。' }
+      : !found.stat.ref.includes('#') && englishVariants.length > 1 ? { warning: '官方条件仅确认此机制存在；具体地面组合等版本差异仍须核对物品原文。' }
       : values.length > 1 && scalar === undefined ? { warning: '多组数值的交易计算方式尚未核验；仅搜索是否存在。' } : {}) };
 }
 
@@ -250,7 +273,7 @@ export function parseEquipment(raw: string): Equipment | null {
       return true;
     });
     const candidates = content.filter((line) => !ignoredLine(simplifyEquipmentText(line)));
-    const known = candidates.some((line) => parseMod(line, 'section').searchable)
+    const known = candidates.some((line) => { const mod = parseMod(line, 'section'); return mod.searchable || mod.recognized; })
       || candidates.length > 1 && parseMod(candidates.join('\n'), 'section').searchable;
     const flavour = rarity === 'unique' && !advanced && !known && candidates.length > 0
       && (seenAdvancedAffix && candidates.every((line) => !/\d/.test(line)) || /^["“「『]/.test(candidates[0]!));
@@ -302,8 +325,10 @@ export function parseEquipment(raw: string): Equipment | null {
   const filled = socketCount !== undefined && runes.length === socketCount && runes.every(Boolean)
     ? runes.filter((rune) => !/^(?:None|Empty)$/i.test(rune)).length : undefined;
   const itemLevelMatch = raw.match(/(?:Item Level|物品等级|物品等級)[:：]\s*(\d+)/i);
-  const missing = mods.filter((mod) => !mod.searchable).length;
+  const missing = mods.filter((mod) => !mod.searchable && !mod.recognized).length;
   if (missing) warnings.push(`${missing} 条文字尚未成为可搜索属性，估价条件不代表完整装备。`);
+  const recognizedOnly = mods.filter((mod) => !mod.searchable && mod.recognized).length;
+  if (recognizedOnly) warnings.push(`${recognizedOnly} 项效果已识别，但无独立交易条件；仍需核对机制与组合价值。`);
   return { raw, name: header[0]!, baseName: base ? (header.find((line) => normalize(line) === normalize(base.en) || normalize(line) === normalize(base.zh)) ?? base.zh) : header[header.length - 1]!,
     ...(base ? { baseNameEnglish: base.en } : {}), ...(unique ? { nameEnglish: unique.en } : {}), category, slot: slotOf(category), rarity,
     ...(stateText.includes('已圣化') ? { sanctified: true } : {}),
@@ -337,6 +362,7 @@ export function occupiedSockets(equipment: Equipment, context: EquipmentMetricCo
  * global increased-percent bonuses remain separate from flat item defence and final character totals. */
 export function equipmentMetricDetails(equipment: Equipment, context: EquipmentMetricContext = {}): {
   values: Record<string, number>; uncounted: string[]; pending: string[]; explanations: string[];
+  effects: { key: string; label: string; note: string; referenceUrl?: string }[];
 } {
   const values: Record<string, number> = {}; const uncounted: string[] = [], pending: string[] = [], explanations: string[] = [];
   const filled = occupiedSockets(equipment, context);
@@ -361,12 +387,17 @@ export function equipmentMetricDetails(equipment: Equipment, context: EquipmentM
   };
   for (const property of equipment.properties) if (['armour', 'evasion', 'energyShield', 'spirit', 'block'].includes(property.name) && property.values[0] !== undefined) values[property.name] = property.values[0];
   const aps = equipment.properties.find((p) => p.name === 'attacksPerSecond')?.values[0];
+  if (equipment.slot === 'weapon' && !aps) pending.push('physicalDps', 'elementalDps', 'totalDps');
+  else if (equipment.slot === 'weapon' && !hasProperty('physicalDamage')) pending.push('physicalDps', 'totalDps');
   if (aps) {
     for (const [property, key] of [['physicalDamage', 'physicalDps'], ['elementalDamage', 'elementalDps'], ['chaosDamage', 'chaosDps']] as const) {
       const damage = equipment.properties.find((p) => p.name === property)?.values;
       if (damage?.length) values[key] = damage.reduce((a, b) => a + b, 0) / 2 * aps;
     }
     values.totalDps = (values.physicalDps ?? 0) + (values.elementalDps ?? 0) + (values.chaosDps ?? 0);
+    if (!hasProperty('elementalDamage') && equipment.mods.some((mod) => /^Adds # to # (?:Fire|Cold|Lightning) Damage$/i.test(mod.ref ?? ''))) {
+      pending.push('elementalDps', 'totalDps'); delete values.totalDps;
+    }
   }
   const simple: Record<string, string> = { '# to maximum Life': 'life', '# to maximum Mana': 'mana', '# to Spirit': 'spirit',
     '# to maximum Energy Shield': 'energyShield', '# to Armour': 'armour', '# to Evasion Rating': 'evasion',
@@ -400,6 +431,14 @@ export function equipmentMetricDetails(equipment: Equipment, context: EquipmentM
     }
     uncounted.push(mod.raw);
   }
-  return { values, uncounted, pending: [...new Set(pending)], explanations };
+  const effects = equipment.mods.filter((mod) => uncounted.includes(mod.raw) && (mod.searchable || mod.recognized)).map((mod) => ({
+    key: mod.key, label: mod.label,
+    note: mod.ref === '#% increased Damage for each type of Elemental Ailment on Enemy' && mod.value !== undefined
+      ? `条件伤害增幅 = ${mod.value}% × 敌人实际承受的元素异常种类数；与其他伤害增加相加，不是无条件的最终 DPS 提升。`
+      : mod.ref?.startsWith('Wind Skills') ? '已识别并保留疾风技能的地面强化机制；需要主技能与流派条件才能计算收益。'
+        : '效果已识别，需结合技能、天赋或生效条件计算；未当作零收益，也未直接加到基础属性。',
+    ...(mod.referenceUrl ? { referenceUrl: mod.referenceUrl } : {}),
+  }));
+  return { values, uncounted, pending: [...new Set(pending)], explanations, effects };
 }
 export const equipmentMetrics = (equipment: Equipment): Record<string, number> => equipmentMetricDetails(equipment).values;

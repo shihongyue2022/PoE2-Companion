@@ -4,6 +4,7 @@ import type { EstimateListing } from './marketEstimate';
 
 export interface UpgradeComponent {
   key: string; label: string; ids: string[]; baseline: number; importance: number; coefficient: number;
+  referenceScale?: number;
 }
 const hash = (id: string) => id.split('.').pop()!;
 
@@ -12,18 +13,26 @@ const hash = (id: string) => id.split('.').pop()!;
 export function upgradeComponents(rows: readonly EquipmentTradeRow[]): UpgradeComponent[] {
   const groups = new Map<string, Omit<UpgradeComponent, 'coefficient'>>();
   for (const row of rows) {
-    if (!row.enabled || row.equipmentFilter || row.presenceOnly || !row.actualValue || row.actualValue <= 0) continue;
+    if (!row.enabled || row.equipmentFilter || row.presenceOnly || row.actualValue === undefined || row.actualValue < 0 || row.actualValue === 0 && !row.referenceScale) continue;
     const hashes = new Set(row.ids.map(hash));
-    if (hashes.size !== 1) continue;
+    if (hashes.size !== 1 && !row.scoringRef) continue;
     const importance = Number(row.weight ?? '1');
     if (!Number.isFinite(importance) || importance < 0 || importance > 100) throw new Error(`${row.label}的权重需在 0～100 之间。`);
     if (importance === 0) continue;
-    const key = [...hashes][0]!;
+    // Verified English scalar aliases (e.g. attack speed) may have multiple trade hashes.
+    // Group by their native semantic reference; score each printed candidate line once.
+    const key = row.scoringRef ? `ref:${row.scoringRef}` : [...hashes][0]!;
     const old = groups.get(key);
     groups.set(key, { key, label: old?.label ?? row.label, ids: [...new Set([...(old?.ids ?? []), ...row.ids])],
-      baseline: (old?.baseline ?? 0) + row.actualValue, importance: Math.max(old?.importance ?? 0, importance) });
+      baseline: (old?.baseline ?? 0) + row.actualValue, importance: Math.max(old?.importance ?? 0, importance),
+      ...(row.referenceScale && Number.isFinite(row.referenceScale) && row.referenceScale > 0 ? { referenceScale: row.referenceScale } : {}) });
   }
   const total = [...groups.values()].reduce((sum, group) => sum + group.importance, 0);
+  if ([...groups.values()].some((group) => group.referenceScale)) {
+    const values = [...groups.values()], baseline = values.reduce((sum, group) => sum + group.baseline * group.importance / (group.referenceScale ?? (group.baseline || 1)), 0);
+    const factor = baseline > 0 ? 100 / baseline : 100 / total;
+    return values.map((group) => ({ ...group, coefficient: factor * group.importance / (group.referenceScale ?? (group.baseline || 1)) }));
+  }
   return [...groups.values()].map((group) => ({ ...group, coefficient: 100 * group.importance / total / group.baseline }));
 }
 
@@ -34,8 +43,9 @@ export function scoreUpgrade(equipment: Equipment, components: readonly UpgradeC
     return { ...component, after, delta: after - component.baseline, score: after * component.coefficient };
   });
   const score = parts.reduce((sum, part) => sum + part.score, 0);
+  const baselineScore = parts.reduce((sum, part) => sum + part.baseline * part.coefficient, 0);
   return { score, parts, tradeoff: parts.some((part) => part.delta < -0.001) && parts.some((part) => part.delta > 0.001),
-    improved: score > 100.001, unknown: equipment.mods.filter((mod) => !mod.searchable).map((mod) => mod.raw) };
+    baselineScore, improved: score > baselineScore + .001, unknown: equipment.mods.filter((mod) => !mod.searchable).map((mod) => mod.raw) };
 }
 
 /** Rebuild public item text only; account, stash and whisper data never enters the browser. */

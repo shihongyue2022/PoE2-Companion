@@ -8,6 +8,15 @@ export interface EquipmentTradeRow {
   filterGroup?: 'map_filters' | 'misc_filters' | 'type_filters';
   presenceOnly?: boolean;
   weight?: string;
+  referenceOnly?: boolean;
+  locked?: boolean;
+  scoringRef?: string;
+  referenceScale?: number;
+  suggested?: boolean;
+  recommendation?: string;
+  targetRange?: { min: number; max: number };
+  targetFloor?: { min?: number; max?: number };
+  targetPatch?: string;
 }
 export type EquipmentTradePreset = 'similar' | 'strict' | 'base' | 'upgrade';
 const format = (value: number): string => String(Math.round(value * 100) / 100);
@@ -42,7 +51,7 @@ export function equipmentTradeRows(equipment: Equipment, preset: EquipmentTradeP
     key: `mod:${mod.key}`, label: mod.label, ids: preset === 'upgrade' && mod.ref ? equipmentStatAliases(mod.ref, mod.ids) : mod.ids, enabled: false,
     min: mod.value === undefined ? '' : format(mod.value), max: '',
     ...(mod.value === undefined ? {} : { actualValue: mod.value }), ...(mod.warning ? { warning: mod.warning } : {}),
-    ...(/Requirements|Cost|Reservation|Duration|Damage taken|Enemy.*Resistance|\bper\b|\bwhile\b|\bif\b|\bwhen\b|Recently|Nearby|During|Minions|Allies/i.test(mod.ref ?? '') ? {
+    ...(mod.ids.some((id) => id.startsWith('skill.')) || /Requirements|Cost|Reservation|Duration|Damage taken|Enemy.*Resistance|\bfor each\b|\bper\b|\bwhile\b|\bif\b|\bwhen\b|Recently|Nearby|During|Minions|Allies/i.test(mod.ref ?? '') ? {
       presenceOnly: true, warning: '此属性的数值优劣取决于机制，默认只查是否存在；需要时请手动设置区间。',
     } : {}),
   })));
@@ -54,7 +63,7 @@ export function equipmentTradeRows(equipment: Equipment, preset: EquipmentTradeP
   return rows.map((row) => {
     if (row.filterGroup) return row;
     const enabled = preset === 'base' ? false : preset === 'strict' ? true : preset === 'upgrade'
-      ? !row.equipmentFilter && !row.presenceOnly && (row.actualValue ?? 0) > 0 : keys.has(row.key);
+      ? !row.equipmentFilter && (row.actualValue === undefined || row.ids.some((id) => id.startsWith('skill.')) || !row.presenceOnly && row.actualValue > 0) : keys.has(row.key);
     const value = row.actualValue;
     const min = value === undefined || row.presenceOnly || preset === 'upgrade' ? ''
       : preset === 'similar' ? format(value - Math.abs(value) * 0.2) : format(value);
@@ -67,6 +76,8 @@ export interface EquipmentTradeOptions {
   exactBase?: boolean; exactUnique?: boolean; status?: 'any' | 'online' | 'securable';
   sameCorruption?: boolean;
   ranking?: boolean; budget?: string; budgetCurrency?: 'exalted' | 'divine';
+  damageSort?: boolean;
+  constraintOnly?: boolean;
 }
 function numeric(text: string, label: string): number | undefined {
   if (!text.trim()) return undefined;
@@ -74,7 +85,7 @@ function numeric(text: string, label: string): number | undefined {
   return Number(text);
 }
 /** The returned query is inspectable and user editable; no tiers or hidden guessed stats. */
-export function buildEquipmentTrade({ equipment, league, rows, exactBase = true, exactUnique = true, status = 'any', sameCorruption = true, ranking = false, budget = '', budgetCurrency = 'divine' }: EquipmentTradeOptions): {
+export function buildEquipmentTrade({ equipment, league, rows, exactBase = true, exactUnique = true, status = 'any', sameCorruption = true, ranking = false, damageSort = false, constraintOnly = false, budget = '', budgetCurrency = 'divine' }: EquipmentTradeOptions): {
   query: FlexibleTradeDocument; url: string; warnings: string[]; activeCount: number;
 } {
   if (!league.trim()) throw new Error('请先填写官方交易赛季。');
@@ -104,7 +115,7 @@ export function buildEquipmentTrade({ equipment, league, rows, exactBase = true,
     else stats.push({ type: 'count', value: { min: 1 }, filters, disabled: false });
   }
   stats.unshift({ type: 'and', filters: simple, disabled: false });
-  if (ranking) {
+  if (ranking && !damageSort && !constraintOnly) {
     const components = upgradeComponents(rows);
     if (!components.length) throw new Error('没有可安全计分的数值词缀，请选择已识别的正向属性；装备面板属性可单独设置最低要求。');
     stats.unshift({ type: 'weight', filters: components.flatMap((component) => component.ids.map((id) => ({
@@ -120,7 +131,7 @@ export function buildEquipmentTrade({ equipment, league, rows, exactBase = true,
       ...(exactUnique && equipment.rarity === 'unique' && equipment.nameEnglish ? { name: equipment.nameEnglish } : {}),
       filters: {
         type_filters: { filters: { ...typeFilters, ...(equipment.category ? { category: { option: equipment.category } } : {}),
-          ...(!['currency', 'gem', 'card'].includes(equipment.rarity) ? { rarity: { option: equipment.rarity === 'unique' ? 'unique' as const : nonEquipment ? equipment.rarity as 'normal' | 'magic' | 'rare' : 'nonunique' as const } } : {}) } },
+          ...(!['currency', 'gem', 'card'].includes(equipment.rarity) && !(ranking && equipment.rarity === 'unique' && !exactUnique) ? { rarity: { option: equipment.rarity === 'unique' ? 'unique' as const : nonEquipment ? equipment.rarity as 'normal' | 'magic' | 'rare' : 'nonunique' as const } } : {}) } },
         misc_filters: { filters: { ...miscFilters, ...(!nonEquipment || equipment.kind === 'waystone' || equipment.kind === 'tablet' || equipment.kind === 'gem' ? { identified: { option: equipment.identified ? 'true' as const : 'false' as const } } : {}),
           ...(sameCorruption && equipment.kind !== 'currency' && equipment.kind !== 'other' ? { corrupted: { option: equipment.corrupted ? 'true' as const : 'false' as const } } : {}),
           ...(sameCorruption && equipment.doubleCorrupted ? { twice_corrupted: { option: 'true' } } : {}) } },
@@ -130,13 +141,13 @@ export function buildEquipmentTrade({ equipment, league, rows, exactBase = true,
       },
       stats,
     },
-    sort: ranking ? { 'statgroup.0': 'desc' } : { price: 'asc' },
+    sort: ranking && damageSort ? { dps: 'desc' } : ranking && !constraintOnly ? { 'statgroup.0': 'desc' } : { price: 'asc' },
   };
   const warnings = [...equipment.warnings];
   if (!active.length) warnings.push(equipment.rarity === 'unique' && equipment.nameEnglish && exactUnique
     ? '仅比较同名传奇，未限制变量数值；不同掷值、腐化与特殊状态会影响价格。'
     : nonEquipment ? '按官方物品名称比较挂牌；不把背包堆叠数量乘进单件报价。' : '仅比较底座或类别，未限制属性；价格不能代表这件装备的价值。');
-  else if (ranking) warnings.push('仅按勾选词缀与自定权重综合排序，数值空缺视为该项未贡献；未选属性和流派机制不计入综合分。');
+  if (ranking) warnings.push(constraintOnly ? '本栏没有可安全计分的伤害属性：仅按抗性硬约束查询，按价格排列，伤害收益需要 PoB2 重算；不会用生命或抗性溢出冒充伤害。' : damageSort ? '按武器面板总攻击 DPS 排序，不能代表主技能的实际 DPS；抗性仍需以整套数据复核。' : '仅按勾选词缀与自定权重综合排序，数值空缺视为该项未贡献；未选属性和流派机制不计入综合分。');
   else if (active.length < rows.length) warnings.push('只匹配勾选的属性；未选属性、特殊效果和组合价值没有纳入。');
   if (!equipment.identified) warnings.push('装备尚未鉴定，无法按隐藏属性估价。');
   return { query, url: `https://www.pathofexile.com/trade2/search/poe2/${encodeURIComponent(league.trim())}?q=${encodeURIComponent(JSON.stringify(query))}`,

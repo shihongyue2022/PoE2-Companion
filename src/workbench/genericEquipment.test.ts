@@ -25,6 +25,17 @@ describe('all equipment clipboard parsing and market searches', () => {
     expect(equipmentDisplayName(item)).toBe('神授命使');
     expect(item.name).toBe('The Ordained');
   });
+  it('recognizes granted skills in implicit and explicit positions without treating skill level as linear power', () => {
+    for (const flag of ['', ' (implicit)', ' (enchant)']) {
+      const item = parseEquipment(`Rarity: UNIQUE\nThe Ordained\nGrand Spear\n--------\nGrants Skill: Level 19 Righteous Descent${flag}\n220% increased Physical Damage`)!;
+      expect(item.mods[0]).toMatchObject({ searchable: true, ids: ['skill.righteous_descent'], value: 19 });
+      const rows = equipmentTradeRows(item, 'upgrade');
+      expect(rows[0]).toMatchObject({ enabled: true, presenceOnly: true, min: '' });
+      const query = buildEquipmentTrade({ equipment: item, league: 'Test', rows, ranking: true }).query;
+      expect(query.query.stats[0]!.filters.some((filter) => filter.id === 'skill.righteous_descent')).toBe(false);
+      expect(query.query.stats[1]!.filters).toContainEqual({ id: 'skill.righteous_descent', disabled: false });
+    }
+  });
   it('keeps sanctification and ward out of the affix list while displaying their actual state and value', () => {
     const item = parseEquipment('Rarity: RARE\nImported Amulet\nGold Amulet\n--------\nItem Level: 82\nWard: 34\n--------\n+157 to maximum Mana\nSanctified')!;
     expect(item).toMatchObject({ sanctified: true, stateText: ['已圣化'] });

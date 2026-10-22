@@ -107,6 +107,22 @@ describe('official market estimate service', () => {
     expect(validateEstimate({ ...body, url: 'http://attacker.test', search: { ...search, sort: { price: 'desc' } } })).toEqual(body);
   });
 
+  it('passes official weapon DPS sorting without reverting it to price order and rejects it on armour', async () => {
+    const ranked = { league: 'Test League', search: { query: { ...search.query, type: 'Crude Bow', filters: {
+      type_filters: { filters: { category: { option: 'weapon.bow' } } },
+    } }, sort: { dps: 'desc' } } };
+    expect(validateEstimate(ranked).search.sort).toEqual({ dps: 'desc' });
+    expect(() => validateEstimate({ ...ranked, search: { ...ranked.search, query: { ...ranked.search.query, filters: { type_filters: { filters: { category: { option: 'armour.boots' } } } } } } })).toThrow('武器 DPS');
+    const network = vi.fn<typeof fetch>().mockResolvedValueOnce(json({ id: 'dpsQuery', total: 2, result: ['high', 'low'] }))
+      .mockResolvedValueOnce(json({ result: [{ ...item(100), id: 'high', item: { name: 'High Bow', typeLine: 'Crude Bow', frameType: 2 } }, { ...item(1), id: 'low', item: { name: 'Low Bow', typeLine: 'Crude Bow', frameType: 2 } }] }));
+    const result = await createEstimateService({ fetch: network })(ranked);
+    expect(JSON.parse(network.mock.calls[0]![1]!.body as string).sort).toEqual({ dps: 'desc' });
+    if (!result.ok) throw new Error('DPS query failed');
+    expect(result.listings?.map((listing) => listing.id)).toEqual(['high', 'low']);
+    expect(result.warnings.join(' ')).toContain('武器面板 DPS');
+    expect(result.warnings.join(' ')).not.toContain('偏向市场低价');
+  });
+
   it('explains the official anonymous weighted-query restriction with an actionable login result', async () => {
     const network = vi.fn<typeof fetch>().mockResolvedValue(json({ error: { code: 2,
       message: 'Query is too complex. Logging in will increase this limit.' } }, 400));

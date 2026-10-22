@@ -6,6 +6,7 @@ import type { PobSource } from './loadoutSource';
 import { readLoadoutQuotes } from './loadoutQuotes';
 import type { Currency } from './finance';
 import { buildModWeight } from './buildAdvice';
+import { damageGoalRows, resistanceQueryRows, usesDamageGoal } from './damageGoal';
 
 export function applyPobLoadout(current: LoadoutState, slots: LoadoutState['slots'], source?: PobSource): LoadoutState {
   return { ...current, slots, character: undefined, source, quotes: readLoadoutQuotes(current.quotes, slots),
@@ -32,6 +33,7 @@ export function liveLoadoutContext(context: LoadoutContext): boolean { return co
 /** Increase importance of explicitly chosen character priorities without inventing a combat model. */
 export function loadoutUpgradeRows(rows: EquipmentTradeRow[], equipment: Equipment, context?: LoadoutContext): EquipmentTradeRow[] {
   if (!context || !liveLoadoutContext(context)) return rows;
+  if (usesDamageGoal(context.state)) return [...damageGoalRows(rows, equipment, context.state), ...resistanceQueryRows(context.state, context.slot, equipment)];
   return rows.map((row) => {
     const mod = equipment.mods.find((entry) => `mod:${entry.key}` === row.key);
     if (!mod || mod.value === undefined || !mod.ref) return row;

@@ -57,6 +57,11 @@
 .lo-socket-grid select { min-width: 100px; }
 .lo-socket-formula { color: #d6dbb5; }
 .lo-comparison section > textarea { width: 100%; min-height: 150px; }
+.wb-pob-repair { padding: 16px; border: 1px solid #78613b; border-radius: 8px; margin-bottom: 18px; background: #282316; }
+.wb-pob-repair p { margin-top: 8px; }
+.wb-pob-repair .wb-actions { align-items: flex-end; }
+.wb-pob-repair label { display: grid; gap: 5px; min-width: 0; font-size: 12px; }
+.wb-pob-repair input[type=file] { max-width: 100%; font-size: 12px; }
 @media (max-width: 1050px) {
   .wb-command-bar { flex-wrap: wrap; gap: 10px; }
   .wb-command-bar .wb-tabs { flex: 1; }

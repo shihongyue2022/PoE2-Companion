@@ -1,17 +1,66 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import EquipmentTradePanel from './EquipmentTradePanel';
 import { BOOTS_SAMPLE } from './fixtures/fullGear';
 import { BREACH_RING_SAMPLE } from './fixtures/breachRing';
 import { loadShippedPatch } from '../../packages/engine/src/loadPatch';
 import { loadGearTrade } from '../lib/gearTrade';
+import { LEGACY_ORDAINED_RAW, ORDAINED_POB_ITEM, ordainedPobXml } from './fixtures/ordainedPob';
+import { emptyLoadout } from './loadout';
 
 const t1Data = loadShippedPatch('data/patches/0.5.0');
 const t1Trade = await loadGearTrade();
 
 afterEach(() => vi.unstubAllGlobals());
 describe('comprehensive upgrade market search', () => {
+  it.each(['upgrade', 'price'] as const)('automatically repairs and searches the reported PoB weapon from the %s entry', async (entry) => {
+    const network = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, builds: [{ id: 'a'.repeat(64), name: 'Original.xml' }] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, xml: ordainedPobXml() })))
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true, total: 0, fetched: 0, priced: 0, groups: [], warnings: [], sampledAt: new Date().toISOString(), cached: false, url: 'https://www.pathofexile.com/trade2' })));
+    vi.stubGlobal('fetch', network);
+    const onRepairItem = vi.fn();
+    const state = { ...emptyLoadout(), slots: { mainHand: LEGACY_ORDAINED_RAW }, source: { kind: 'pob' as const, fileName: 'Original.xml', setId: '1', setTitle: 'Current', secondWeapons: false, importedAt: '2026-10-22T00:00:00Z', equipmentSignature: '' } };
+    render(<EquipmentTradePanel raw={LEGACY_ORDAINED_RAW} league="Test" onLeague={() => {}} intent={entry} onRepairItem={onRepairItem}
+      loadoutContext={{ state, slot: 'mainHand', raw: LEGACY_ORDAINED_RAW }} />);
+    if (entry === 'price') {
+      expect(network).not.toHaveBeenCalled();
+      await userEvent.setup().click(screen.getByRole('button', { name: /综合找升级/ }));
+    }
+    expect(screen.queryByRole('button', { name: '搜索市场综合候选' })).toBeNull();
+    expect(screen.getByText(/9 条词缀带有旧 PoB 待核对标记/)).toBeVisible();
+    await waitFor(() => expect(screen.getByRole('button', { name: '搜索市场综合候选' })).toBeVisible());
+    expect(onRepairItem).toHaveBeenCalledTimes(1);
+    expect(onRepairItem.mock.calls[0]![0]).toBe(LEGACY_ORDAINED_RAW);
+    expect(onRepairItem.mock.calls[0]![1]).not.toContain('PoB数值待');
+    const url = new URL(screen.getByRole('link', { name: '打开升级候选搜索' }).getAttribute('href')!);
+    const query = JSON.parse(url.searchParams.get('q')!);
+    expect(query.sort).toEqual({ 'statgroup.0': 'desc' }); expect(query.query.stats[0].filters.length).toBeGreaterThan(1);
+    expect(query.query.name).toBe('The Ordained'); expect(query.query.filters.misc_filters.filters.corrupted).toBeUndefined();
+    expect(query.query.stats.find((group: { type: string }) => group.type === 'and').filters).toContainEqual({ id: 'skill.righteous_descent', disabled: false });
+    expect(query.query.stats[0].filters.some((filter: { id: string }) => filter.id.startsWith('skill.'))).toBe(false);
+    expect(screen.getByText('已识别但无独立交易条件（1）')).toBeInTheDocument();
+    expect(screen.queryByText(/未单独筛选的文字/)).toBeNull();
+    expect(screen.getByRole('link', { name: '这件传奇的词缀与机制 ↗', hidden: true })).toHaveAttribute('href', 'https://poe2db.tw/us/The_Ordained');
+    await waitFor(() => expect(network).toHaveBeenCalledTimes(3), { timeout: 2000 });
+    expect(JSON.parse(network.mock.calls[2]![1]!.body as string).search).toEqual(query);
+    await userEvent.setup().click(screen.getByRole('checkbox', { name: '限定同名传奇' }));
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    expect(network).toHaveBeenCalledTimes(3); // Editing filters must not auto-send repeated market requests.
+
+  });
+  it('shows a changed-source error without replacing the existing item or enabling unsafe scoring', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, builds: [{ id: 'b'.repeat(64), name: 'Original.xml' }] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, xml: ordainedPobXml(ORDAINED_POB_ITEM.replace('220%', '240%')) }))));
+    const onRepairItem = vi.fn();
+    const state = { ...emptyLoadout(), slots: { mainHand: LEGACY_ORDAINED_RAW }, source: { kind: 'pob' as const, fileName: 'Original.xml', setId: '1', setTitle: 'Current', secondWeapons: false, importedAt: '2026-10-22T00:00:00Z', equipmentSignature: '' } };
+    render(<EquipmentTradePanel raw={LEGACY_ORDAINED_RAW} league="Test" onLeague={() => {}} intent="upgrade" onRepairItem={onRepairItem}
+      loadoutContext={{ state, slot: 'mainHand', raw: LEGACY_ORDAINED_RAW }} />);
+    const repair = screen.getByRole('region', { name: '修复 PoB 装备识别' });
+    expect(await within(repair).findByRole('alert')).toHaveTextContent('装备与当前记录不同');
+    expect(onRepairItem).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '搜索市场综合候选' })).toBeNull();
+  });
   it('queries all six T1 affix directions and keeps the strict query when the market has no listings', async () => {
     const network = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ ok: true, total: 0, fetched: 0,
       priced: 0, groups: [], warnings: [], sampledAt: new Date().toISOString(), cached: false, url: 'https://www.pathofexile.com/trade2' })));

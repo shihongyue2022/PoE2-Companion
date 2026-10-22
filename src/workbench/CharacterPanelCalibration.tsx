@@ -45,6 +45,12 @@ export default function CharacterPanelCalibration({ state, totals, onSave }: Pro
     <summary>游戏角色面板基准 <span>{state.character ? validCharacterPanel(state) ? '已录入 · 对应当前装备' : '装备已变化 · 需要核对' : '尚未录入'}</span></summary>
     <p className="lo-footnote">装备合计与游戏最终面板是两种口径。天赋、等级、属性、技能和条件效果尚未完整计算；这里记录实际面板，不按简单倍率假装复现游戏。</p>
     <p className="lo-footnote">抗性请填括号中的未封顶总值，例如 75%（189%）填写 189；护甲和闪避填写数值，不填减伤率或闪避概率。基准仅适用于同一套装备和相同游戏状态，天赋或技能变化后也需重新录入。</p>
+    {state.source?.reference && state.source.equipmentSignature === equipmentSignature(state.slots) && <button type="button" className="wb-button" onClick={() => {
+      const reference = state.source!.reference!;
+      setValues((old) => ({ ...old, ...Object.fromEntries(Object.entries(reference.values).map(([key, value]) => [key, String(value)])) }));
+      setCaps((old) => ({ ...old, ...Object.fromEntries(Object.entries(reference.caps).map(([key, value]) => [key, String(value)])) }));
+      setError('已填入 PoB2 中可核对的角色总值。请补齐缺失的四项未封顶总抗性及各自上限，确认与当前游戏一致后保存；未将有效抗性冒充总值。');
+    }}>填入可核对的 PoB2 面板值</button>}
     <label className="wb-form-label">导入面板记录 JSON<input aria-label="导入角色面板记录" type="file" accept=".json,application/json" onChange={(event) => { void importRecord(event); }} /></label>
     <div className="lo-minimums">{fields.map((field) => <label key={field.key}>{field.label}{RESISTANCE_KEYS.some((key) => key === field.key) ? '未封顶总值' : '游戏面板值'}
       <input aria-label={`角色面板${field.label}`} type="number" step="any" value={values[field.key] ?? ''} placeholder="未录入" onChange={(event) => setValues({ ...values, [field.key]: event.target.value })} /></label>)}</div>

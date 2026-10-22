@@ -1,0 +1,15 @@
+.wb-search-guidance { border: 1px solid #526440; border-radius: 8px; padding: 14px; margin: 14px 0; background: #192013; }
+.wb-search-guidance h4 { margin: 0 0 8px; }
+.wb-guidance-choices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.wb-guidance-choices button { text-align: left; padding: 10px; color: #cad7b8; background: #11170d; border: 1px solid #3d4932; border-radius: 5px; cursor: pointer; }
+.wb-guidance-choices button.active { border-color: #bdcc8f; background: #303d21; }
+.wb-guidance-choices button:disabled { opacity: .5; cursor: default; }
+.wb-guidance-choices strong, .wb-guidance-choices small { display: block; }
+.wb-guidance-choices small { font-size: 10px; margin-top: 4px; color: #9caa84; }
+.wb-roll-hint { display: block; margin-top: 6px; }
+.wb-roll-hint small { color: #b7c69c !important; }
+.wb-condition-hint { justify-self: end; align-self: center; font-size: 11px; color: #c2d49a; }
+.wb-trade-manual { grid-column: 1 / -1; margin: 0; }
+.wb-trade-manual > summary { font-size: 10px; color: #8d9e7c; cursor: pointer; }
+.wb-trade-manual .wb-trade-bounds { max-width: 360px; margin: 10px 0 0 auto; }
+@media(max-width: 600px) { .wb-guidance-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wb-condition-hint { justify-self: start; padding-left: 24px; } }

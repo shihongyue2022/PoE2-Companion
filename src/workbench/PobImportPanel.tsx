@@ -5,6 +5,7 @@ import LocalPobImport from './LocalPobImport';
 import type { PobSource } from './loadoutSource';
 import { LoadoutChangePreview } from './LoadoutSourcePanel';
 import { translatePobLabel } from './localization';
+import { gemInfo, mainGem } from './pobCombat';
 
 export default function PobImportPanel({ onImport, current }: { onImport: (slots: LoadoutState['slots'], source: PobSource) => void; current?: LoadoutState }) {
   const [text, setText] = useState(''); const [document, setDocument] = useState<PobDocument | null>(null);
@@ -31,7 +32,7 @@ export default function PobImportPanel({ onImport, current }: { onImport: (slots
       <li>在 Build Sharing 点击 Generate，再点击 Copy，取得这次角色数据的分享代码；也可保存本地 XML。</li>
       <li>在下方粘贴代码或选择 XML，预览栏位，再确认替换整套装备。换装后请在 PoB2 更新角色并重新导出。</li>
     </ol>
-    <p className="lo-footnote">在 PoB2 导出分享代码，或选择本地 XML。先预览，再替换本页整套装备；原有角色面板基准会清除。技能、天赋和 PoB 伤害计算不在此次导入范围内。</p>
+    <p className="lo-footnote">先预览，再替换本页整套装备；原有角色面板基准会清除。同时读取主技能、辅助宝石及 PoB2 保存的伤害快照，工坊换装不会自动重算技能伤害。</p>
     <textarea aria-label="PoB2 分享代码或 XML" rows={4} disabled={busy} value={text} onChange={(event) => { setText(event.target.value); setDocument(null); setError(''); }} placeholder="粘贴 PoB2 分享代码或 XML（暂不支持分享网址）" />
     <div className="lo-actions"><button type="button" className="wb-button" disabled={busy || !text.trim()} onClick={() => { void parse(text); }}>{busy ? '正在解析…' : '预览 PoB2 装备'}</button>
       <label>选择 XML 文件<input aria-label="PoB2 XML 文件" type="file" accept=".xml,.txt" disabled={busy} onChange={(event) => {
@@ -47,6 +48,7 @@ export default function PobImportPanel({ onImport, current }: { onImport: (slots
       <label>装备组<select aria-label="PoB2 装备组" value={setId} onChange={(event) => { setSetId(event.target.value); setSecondWeapons(document.sets.find((set) => set.id === event.target.value)?.secondWeapons ?? false); }}>{document.sets.map((set) => <option key={set.id} value={set.id}>{translatePobLabel(set.title)}</option>)}</select></label>
       <label><input type="checkbox" checked={secondWeapons} onChange={(event) => setSecondWeapons(event.target.checked)} />使用第二套武器</label>
       <p>可导入 {preview.imported.length} 件。未导入的栏位将留空，不会保留旧装备混入新方案。</p>
+      {document.profile?.combat && <p className="lo-footnote">技能方案 {document.profile.combat.sets.length} 套 · 主技能：{(() => { const gem = mainGem(document.profile.combat); return gem ? gemInfo(gem).label : '未指定'; })()} · 保存的伤害将在“技能与构成”中展示。</p>}
       <ul>{preview.imported.map((entry) => <li key={entry}>{entry}</li>)}</ul>
       {preview.warnings.length > 0 && <ul className="lo-warnings">{preview.warnings.map((entry, index) => <li key={index}>{entry}</li>)}</ul>}
       {current && <LoadoutChangePreview before={current} after={{ ...current, slots: preview.slots }} />}

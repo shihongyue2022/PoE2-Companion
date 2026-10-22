@@ -1,0 +1,28 @@
+.ca-panel > summary { display: flex; align-items: center; gap: .5rem; }
+.ca-panel section { margin-top: 1.2rem; padding-top: .8rem; border-top: 1px solid #929c6433; }
+.ca-panel h4 { margin: .5rem 0; }
+.ca-panel select { display: block; max-width: 100%; margin: .5rem 0; }
+.ca-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: .8rem; margin: .8rem 0; }
+.ca-stat-grid > div { padding: .8rem; background: #10160e; border-radius: .5rem; }
+.ca-stat-grid span, .ca-stat-grid strong { display: block; }
+.ca-stat-grid span { font-size: .8rem; color: #a4ad8b; }
+.ca-stat-grid strong { margin-top: .3rem; color: #d5e4ac; font-size: 1.2rem; }
+.ca-gems { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; }
+.ca-gem { max-width: 100%; overflow-wrap: anywhere; border: 1px solid #63887d; background: #14231f; border-radius: .4rem; padding: .5rem .65rem; }
+.ca-gem.support { border-color: #72774d; background: #202415; }
+.ca-gem b, .ca-gem small { display: block; }
+.ca-gem small { font-size: .72rem; color: #a7b390; }
+.ca-gem.inactive { opacity: .5; }
+.ca-group { padding: .6rem 0; border-bottom: 1px solid #929c6422; }
+.ca-damage-parts > div { display: grid; grid-template-columns: 1fr auto; gap: .3rem .5rem; padding: .4rem 0; font-size: .85rem; }
+.ca-damage-parts .ca-bar-track { grid-column: 1 / -1; }
+.ca-bar-track { background: #323a29; height: .45rem; border-radius: .3rem; overflow: hidden; }
+.ca-bar-track > span { display: block; height: 100%; background: #bbc98e; }
+.ca-bar-track > .hit { background: #82b5ae; }
+.ca-bar-track > .dot { background: #d2a477; }
+.ca-contributions { display: grid; gap: .6rem; margin: .8rem 0; }
+.ca-contributions > button { display: grid; grid-template-columns: 4.5rem 1fr auto; align-items: center; gap: .6rem; background: transparent; color: inherit; border: 0; padding: .3rem 0; text-align: left; cursor: pointer; font-size: .85rem; }
+.ca-contributions > button:hover { color: #e0edb6; }
+.ca-file { position: relative; overflow: hidden; cursor: pointer; }
+.ca-file input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+@media (max-width: 540px) { .ca-contributions > button { grid-template-columns: 3.5rem 1fr auto; gap: .4rem; } }

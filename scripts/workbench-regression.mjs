@@ -1,4 +1,4 @@
-import { chromium } from '@playwright/test';
+import { chromium, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 
@@ -24,6 +24,8 @@ const pass = (name) => { checks.push(name); console.log('PASS', name); };
 await mkdir('artifacts/workbench', { recursive: true });
 try {
   await page.goto(process.env.WORKBENCH_URL ?? 'http://127.0.0.1:5173', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('navigation', { name: '工作区域' }).getByRole('button', { name: '制作策略' }).click();
+  await page.locator('.wb-library > summary').click();
   await page.locator('.wb-pool-row').first().waitFor();
   const targetIssue = page.locator('.wb-target-issue');
   assert.match(await targetIssue.innerText(), /普通精华.*魔法.*稀有/s);
@@ -65,6 +67,7 @@ try {
   pass('Ruby Ring artwork loads from the verified official GGG CDN with a source link');
   await page.screenshot({ path: 'artifacts/workbench/official-ring.png', fullPage: true });
 
+  await page.getByText('修改底座、稀有度与物等', { exact: true }).click();
   await page.getByLabel('装备类型', { exact: true }).selectOption('Amulets');
   await page.waitForFunction(() => {
     const image = document.querySelector('.wb-item-art img');
@@ -73,6 +76,21 @@ try {
   assert.notEqual(await page.locator('.wb-item-art img').getAttribute('src'), source);
   pass('switching to an amulet loads its corresponding official artwork');
   await page.screenshot({ path: 'artifacts/workbench/official-amulet.png', fullPage: true });
+  await page.evaluate(async () => {
+    const { BREACH_RING_SAMPLE } = await import('/src/workbench/fixtures/breachRing.ts');
+    const { loadEngine } = await import('/src/lib/engine.ts');
+    const { parseWorkbenchItem } = await import('/src/workbench/itemImport.ts');
+    const imported = parseWorkbenchItem((await loadEngine()).data, BREACH_RING_SAMPLE);
+    localStorage.setItem('poe2-workbench-v1', JSON.stringify({ item: { baseId: 'Rings', level: 79, rarity: 'rare', prefixes: imported.prefixes.slice(0, 1), suffixes: imported.suffixes.slice(1) },
+      baseName: 'Breach Ring', targets: [], raw: BREACH_RING_SAMPLE, league: 'Forbidden Rites', overrides: {}, baseCost: 0,
+      warnings: ['未识别：{ 已褻瀆 前綴 "電極的"(階層: 1) }'] }));
+  });
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('poe2-workbench-v1'));
+    return [saved.item.prefixes.length, saved.item.suffixes.length, saved.warnings.length];
+  })).toEqual([3, 3, 0]);
+  pass('engine readiness repairs a saved legacy advanced-header import before further crafting');
   assert.deepEqual(errors, []);
   await writeFile('artifacts/workbench/regression-results.json', JSON.stringify({ checks, errors, at: new Date().toISOString() }, null, 2));
 } finally {

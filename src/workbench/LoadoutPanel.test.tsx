@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LoadoutPanel from './LoadoutPanel';
-import { LOADOUT_STORAGE_KEY } from './loadout';
+import { emptyLoadout, LOADOUT_STORAGE_KEY, serializeLoadout } from './loadout';
+import { TAMING_LEGACY_RAW, tamingPobXml } from './fixtures/tamingPob';
+import { equipmentMetricDetails, parseEquipment } from './genericEquipment';
 
 const ring = (name: string, life: number) => `Item Class: Rings
 Rarity: Rare
@@ -16,6 +18,32 @@ Item Level: 82
 
 describe('loadout player actions', () => {
   beforeEach(() => { localStorage.clear(); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('repairs the selected legacy ring on the equipment page and sends corrected data into pricing', async () => {
+    const network = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, builds: [{ id: 'e'.repeat(64), name: 'Original.xml' }] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, xml: tamingPobXml() })));
+    vi.stubGlobal('fetch', network);
+    const before = { ...emptyLoadout(), slots: { ring1: ring('Keep Left', 70), ring2: TAMING_LEGACY_RAW },
+      source: { kind: 'pob' as const, fileName: 'Original.xml', setId: '1', setTitle: 'Current', secondWeapons: false, importedAt: '2026-10-22T00:00:00Z', equipmentSignature: '' } };
+    localStorage.setItem(LOADOUT_STORAGE_KEY, serializeLoadout(before));
+    const user = userEvent.setup(), onPrice = vi.fn();
+    const view = render(<LoadoutPanel active={false} onPrice={onPrice} />);
+    await user.click(screen.getByRole('button', { name: '右戒指：The Taming' }));
+    expect(network).not.toHaveBeenCalled();
+    view.rerender(<LoadoutPanel active onPrice={onPrice} />);
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(LOADOUT_STORAGE_KEY)!).slots.ring2).not.toContain('PoB数值待'));
+    const state = JSON.parse(localStorage.getItem(LOADOUT_STORAGE_KEY)!);
+    expect(state.slots.ring1).toBe(before.slots.ring1); expect(state.goals).toEqual(before.goals);
+    const details = within(screen.getByRole('region', { name: '右戒指装备详情' }));
+    expect(details.getByText('3 项已识别的条件与特殊效果')).toBeInTheDocument();
+    expect(details.queryByText(/条词缀仍需核对/)).toBeNull();
+    expect(screen.getByRole('region', { name: '右戒指装备详情' }).querySelector('.lo-item-mods')?.textContent).not.toContain('as being boosted');
+    expect(equipmentMetricDetails(parseEquipment(state.slots.ring2)!).values).toMatchObject({ dexterity: 14, fireResistance: 38, coldResistance: 38, lightningResistance: 38 });
+    await user.click(details.getByRole('button', { name: '估价这件装备' }));
+    expect(onPrice).toHaveBeenLastCalledWith(state.slots.ring2, 'price', 'ring2');
+    expect(network).toHaveBeenCalledTimes(2);
+  });
 
   it('records a game baseline and distinguishes overcapped resistance from equipment-only changes', async () => {
     const user = userEvent.setup();

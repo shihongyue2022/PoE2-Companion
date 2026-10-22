@@ -48,7 +48,8 @@ describe('shared character data integrations', () => {
     expect(chooseComparisonSlot(state, parseEquipment(raw)!, 'ring2')).toBe('ring2');
     const item = parseEquipment(BOOTS_SAMPLE)!, rows = equipmentTradeRows(item, 'upgrade');
     const context = { state, slot: 'boots' as const, raw: BOOTS_SAMPLE };
-    expect(loadoutUpgradeRows(rows, item, context).find((row) => row.label.includes('生命'))?.weight).toBe('3');
+    expect(loadoutUpgradeRows(rows, item, context).find((row) => row.label.includes('生命'))?.weight).toBe('0');
+    expect(loadoutUpgradeRows(rows, item, { ...context, state: { ...state, goals: { ...state.goals, objective: 'balanced' } } }).find((row) => row.label.includes('生命'))?.weight).toBe('3');
     expect(loadoutUpgradeRows(rows, item, { ...context, raw: BOOTS_UPGRADE })).toEqual(rows);
   });
   it('rejects stale/wrong-league quotes, deduplicates held assets and never generates transactions or overrides existing marks', async () => {

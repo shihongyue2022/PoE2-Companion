@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { equipmentDisplayName, itemKindLabel, localizeEquipmentName, parseEquipment, type Equipment } from './genericEquipment';
 import { buildEquipmentTrade, equipmentTradeRows, type EquipmentTradePreset, type EquipmentTradeRow } from './genericEquipmentTrade';
 import { PriceEstimate, type PriceEstimateProps } from './PriceEstimate';
@@ -8,62 +8,113 @@ import UpgradeCandidates from './UpgradeCandidates';
 import type { PatchData } from '../../packages/engine/src/types';
 import type { GearTrade } from '../lib/gearTrade';
 import { buildEquipmentT1Rows, equipmentT1Satisfied } from './equipmentT1';
-import { loadoutUpgradeRows, liveLoadoutContext, priorityNames, type LoadoutContext } from './loadoutIntegration';
+import { liveLoadoutContext, priorityNames, type LoadoutContext } from './loadoutIntegration';
 import { slotLabel as loadoutSlotLabel } from './loadout';
+import PobItemRepair from './PobItemRepair';
+import AffixReferencePanel from './AffixReferencePanel';
+import { cachedAffixReference, mergeReferenceRows, readAffixReference, type AffixReferenceResult } from './affixReference';
+import { POB_REVIEW_MARKER } from './pobRepair';
+import { damageSkill, enforceDamageGoalRows, resistanceGate, usesDamageGoal } from './damageGoal';
+import { guidedSearchRows, rollGuides, type SearchAmbition } from './searchGuidance';
+import SearchGuidancePanel, { RollRangeHint, SearchConditionHint } from './SearchGuidancePanel';
+import { mergeSkillTargetRows, skillPlan, skillTargetRows } from './skillRecommendation';
+import { captureUpgradeSearch, upgradeSearchRows, type UpgradeSearchSnapshot } from './upgradeWorkflow';
 type Preset = EquipmentTradePreset | 't1';
 
 export interface EquipmentTradePanelProps {
   raw: string; league: string; onLeague: (league: string) => void; autoEstimate?: boolean;
-  onEstimate?: PriceEstimateProps['onEstimate']; onCompare?: (equipment: Equipment) => void;
+  onEstimate?: PriceEstimateProps['onEstimate']; onCompare?: (equipment: Equipment, search?: UpgradeSearchSnapshot) => void;
   leagues?: readonly TradeLeague[]; leagueError?: string; intent?: 'price' | 'upgrade' | 't1';
   t1Data?: PatchData; t1Trade?: GearTrade | null;
   loadoutContext?: LoadoutContext;
   onRecordQuote?: PriceEstimateProps['onRecordQuote'];
+  onRepairItem?: (expectedRaw: string, repairedRaw: string) => void;
 }
 export default function EquipmentTradePanel(props: EquipmentTradePanelProps) {
-  const parsed = useMemo(() => parseEquipment(props.raw), [props.raw]);
+  const [recovered, setRecovered] = useState<{ original: string; raw: string } | null>(null);
+  const raw = recovered?.original === props.raw ? recovered.raw : props.raw;
+  const parsed = useMemo(() => parseEquipment(raw), [raw]);
   const [selectedType, setSelectedType] = useState('');
+  const [repairOnUpgrade, setRepairOnUpgrade] = useState(props.intent === 'upgrade');
+  const intent = repairOnUpgrade ? 'upgrade' : props.intent;
   const selected = parsed?.officialTypeCandidates?.find((candidate) => candidate.type === selectedType);
   const equipment = parsed && selected ? { ...parsed, baseNameEnglish: selected.type, category: selected.category,
     warnings: parsed.warnings.filter((warning) => !warning.includes('对应多件官方物品')) } : parsed;
   if (!equipment) return <div className="wb-trade-search"><h3>全物品查价</h3><p>请粘贴完整物品文本，包括稀有度和名称。支持装备、地图、碑牌、宝石、通货及材料的繁体、简体和英文文本。</p></div>;
-  return <>{parsed?.officialTypeCandidates && <label className="wb-form-label">此中文名称存在歧义，请核对物品说明选择官方名称<select aria-label="选择准确的官方物品" value={selected?.type ?? ''} onChange={(event) => setSelectedType(event.target.value)}><option value="">请选择，不自动猜测</option>{parsed.officialTypeCandidates.map((candidate) => <option key={candidate.type} value={candidate.type}>{candidate.type}</option>)}</select></label>}<EquipmentTradeEditor key={`${props.raw}:${selected?.type ?? ''}:${props.intent ?? 'price'}`} {...props} equipment={equipment} /></>;
+  return <><PobItemRepair key={raw} raw={raw} auto={repairOnUpgrade} context={props.loadoutContext} onRepair={(next) => {
+    props.onRepairItem?.(raw, next); setRecovered({ original: props.raw, raw: next });
+  }} />{parsed?.officialTypeCandidates && <label className="wb-form-label">此中文名称存在歧义，请核对物品说明选择官方名称<select aria-label="选择准确的官方物品" value={selected?.type ?? ''} onChange={(event) => setSelectedType(event.target.value)}><option value="">请选择，不自动猜测</option>{parsed.officialTypeCandidates.map((candidate) => <option key={candidate.type} value={candidate.type}>{candidate.type}</option>)}</select></label>}<EquipmentTradeEditor key={`${raw}:${selected?.type ?? ''}:${intent ?? 'price'}`} {...props} intent={intent} raw={raw} equipment={equipment} onUpgrade={() => setRepairOnUpgrade(true)} /></>;
 }
 
-function EquipmentTradeEditor({ equipment, raw, league, onLeague, autoEstimate, onEstimate, onCompare, leagues = [], leagueError, intent = 'price', t1Data, t1Trade, loadoutContext, onRecordQuote }: EquipmentTradePanelProps & { equipment: Equipment }) {
+function EquipmentTradeEditor({ equipment, raw, league, onLeague, autoEstimate, onEstimate, onCompare, leagues = [], leagueError, intent = 'price', t1Data, t1Trade, loadoutContext, onRecordQuote, onUpgrade }: EquipmentTradePanelProps & { equipment: Equipment; onUpgrade: () => void }) {
   const nonEquipment = equipment.kind !== undefined && equipment.kind !== 'equipment';
   const t1 = useMemo(() => t1Data && t1Trade ? buildEquipmentT1Rows(equipment, t1Data, t1Trade) : null, [equipment, t1Data, t1Trade]);
   const initialPreset: Preset = nonEquipment ? 'base' : intent === 't1' ? 't1' : intent === 'upgrade' ? 'upgrade' : 'similar';
   const [preset, setPreset] = useState<Preset>(initialPreset);
+  const targets = useMemo(() => loadoutContext && liveLoadoutContext(loadoutContext) && usesDamageGoal(loadoutContext.state)
+    ? skillTargetRows(equipment, loadoutContext.state, t1Data, t1Trade ?? undefined) : [], [equipment, loadoutContext, t1Data, t1Trade]);
   const makeRows = (next: Preset) => next === 't1' ? t1?.rows ?? equipmentTradeRows(equipment, 'strict')
-    : next === 'upgrade' ? loadoutUpgradeRows(equipmentTradeRows(equipment, next), equipment, loadoutContext) : equipmentTradeRows(equipment, next);
-  const [rows, setRows] = useState(() => makeRows(initialPreset));
+    : next === 'upgrade' ? upgradeSearchRows(equipment, loadoutContext, t1Data, t1Trade) : equipmentTradeRows(equipment, next);
+  const [rows, setRows] = useState(() => initialPreset === 't1' ? makeRows(initialPreset) : mergeReferenceRows(makeRows(initialPreset), cachedAffixReference(equipment)));
   const [exactBase, setExactBase] = useState(intent !== 'upgrade' && intent !== 't1');
   const [exactUnique, setExactUnique] = useState(true);
-  const [sameCorruption, setSameCorruption] = useState(true);
+  const [sameCorruption, setSameCorruption] = useState(initialPreset !== 'upgrade');
   const [status, setStatus] = useState<'any' | 'online' | 'securable'>('any');
   const [custom, setCustom] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [budget, setBudget] = useState('');
   const [budgetCurrency, setBudgetCurrency] = useState<'exalted' | 'divine'>('divine');
-  const activeRows = preset === 't1' && !custom ? t1?.rows ?? rows : rows;
+  const [ambition, setAmbition] = useState<SearchAmbition | 'custom'>('auto');
+  const [guidanceNote, setGuidanceNote] = useState('');
+  const [rollReference, setRollReference] = useState<AffixReferenceResult | undefined>(() => cachedAffixReference(equipment));
+  const [rangeBusy, setRangeBusy] = useState(false), [rangeAttempted, setRangeAttempted] = useState(false);
+  const rangeRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => rangeRequest.current?.abort(), []);
+  const damageMode = preset === 'upgrade' && !!loadoutContext && liveLoadoutContext(loadoutContext) && usesDamageGoal(loadoutContext.state);
+  const mergedTargets = damageMode && !custom ? mergeSkillTargetRows(rows, targets.map((row) => rows.find((old) => old.key === row.key && old.referenceScale) ?? row), equipment) : rows;
+  const activeRows = damageMode ? enforceDamageGoalRows(mergedTargets, equipment, loadoutContext.state, loadoutContext.slot)
+    : preset === 't1' && !custom ? t1?.rows ?? rows : rows;
+  const guides = useMemo(() => rollGuides(equipment, t1, rollReference, activeRows), [equipment, t1, rollReference, activeRows]);
+  const damageSort = damageMode && !activeRows.some((row) => row.referenceScale) && equipment.slot === 'weapon' && !!damageSkill(loadoutContext.state)?.tags.includes('attack');
+  const goalGate = damageMode ? resistanceGate(loadoutContext.state, loadoutContext.slot, equipment) : undefined;
+  const constraintOnly = damageMode && !damageSort && upgradeComponents(activeRows).length === 0;
   const fullT1 = preset === 't1' && t1 !== null && equipmentT1Satisfied(t1, activeRows);
   const listId = useId();
   let result: ReturnType<typeof buildEquipmentTrade> | undefined;
   let error = '';
   try {
+    if (preset === 'upgrade' && raw.includes(POB_REVIEW_MARKER)) throw new Error('原 PoB2 词缀仍需核对，完成重新识别后再搜索升级；原文件不一致时请先选择正确 XML。');
     if (preset === 't1' && !t1) throw new Error('T1 规则与交易映射正在加载，请稍候。');
     if (preset === 't1' && t1 && !t1.complete) throw new Error('尚不能为这件装备生成完整的全词缀 T1 条件，请核对下方提示；未退回普通查价。');
     result = buildEquipmentTrade({ equipment, league, rows: activeRows, exactBase, exactUnique, status, sameCorruption,
-    ranking: preset === 'upgrade', budget: preset === 'upgrade' ? budget : '', budgetCurrency }); }
+    ranking: preset === 'upgrade', damageSort, constraintOnly, budget: preset === 'upgrade' ? budget : '', budgetCurrency }); }
   catch (failure) { error = failure instanceof Error ? failure.message : String(failure); }
   useEffect(() => {
     if (autoEstimate && error) onEstimate?.({ status: 'error', message: '物品信息需要核对', detail: error, url: 'https://www.pathofexile.com/trade2' });
   }, [autoEstimate, error, onEstimate]);
-  const unknown = equipment.mods.filter((mod) => !mod.searchable);
+  const unknown = equipment.mods.filter((mod) => !mod.searchable && !mod.recognized);
+  const components = upgradeComponents(activeRows);
+  const preserved = activeRows.filter((row) => row.enabled && !row.equipmentFilter && (row.presenceOnly || row.actualValue === undefined));
   const upgrading = preset === 'upgrade';
   const noStats = result?.activeCount === 0;
-  function applyPreset(next: Preset) { setPreset(next); setRows(makeRows(next)); setCustom(false); setExactBase(next !== 'upgrade' && next !== 't1'); }
-  function edit(key: string, patch: Partial<EquipmentTradeRow>) { setRows(activeRows.map((row) => row.key === key ? { ...row, ...patch } : row)); setCustom(true); }
+  function applyPreset(next: Preset) { if (next === 'upgrade') onUpgrade(); setPreset(next); setRows(next === 't1' ? makeRows(next) : mergeReferenceRows(makeRows(next), cachedAffixReference(equipment))); setCustom(false); setAmbition('auto'); setGuidanceNote(''); setExactBase(next !== 'upgrade' && next !== 't1'); setSameCorruption(next !== 'upgrade'); }
+  function edit(key: string, patch: Partial<EquipmentTradeRow>) { setRows(activeRows.map((row) => row.key === key ? { ...row, ...patch } : row)); setCustom(true); setAmbition('custom'); }
+  function chooseGuidance(value: SearchAmbition) {
+    const generated = guidedSearchRows(value === 'auto' ? mergeReferenceRows(makeRows('upgrade'), cachedAffixReference(equipment)) : activeRows, guides, value);
+    setRows(generated.rows); setAmbition(value); setCustom(false);
+    setGuidanceNote(value === 'auto' ? '已恢复系统推荐条件，无需设置单项 roll 下限。点击搜索更新候选。'
+      : `已自动设置 ${generated.applied} 项门槛${generated.unavailable ? `；${generated.unavailable} 项范围未确认，保持自动择优` : ''}。不是全词缀 T1 保证，点击搜索更新候选。`);
+  }
+  async function lookupRanges() {
+    if (rangeBusy) return;
+    const request = new AbortController(); rangeRequest.current?.abort(); rangeRequest.current = request;
+    setRangeBusy(true); setRangeAttempted(true);
+    try {
+      const next = await readAffixReference(equipment, request.signal);
+      if (!request.signal.aborted) { setRollReference(next); setRows((old) => mergeReferenceRows(old, next)); setGuidanceNote('已核对英文传奇资料；对应范围会显示在属性下方，未将资料数值写入当前装备。'); }
+    } catch (reason) { if (!request.signal.aborted) setGuidanceNote(reason instanceof Error ? reason.message : '范围资料暂不可用，保持自动排序。'); }
+    finally { if (!request.signal.aborted) setRangeBusy(false); }
+  }
   const slotLabel = { weapon: '武器', offhand: '副手', helmet: '头盔', body: '胸甲', gloves: '手套', boots: '鞋靴', ring: '戒指', amulet: '项链', belt: '腰带', jewel: '珠宝', flask: '药剂', charm: '护符', relic: '圣物', other: '装备' }[equipment.slot];
   return <div className={`wb-trade-search wb-equipment-trade${upgrading ? ' is-upgrade' : ''}`} role="region" aria-label="全物品查价">
     <div className="wb-section-head"><div><span className="wb-eyebrow">ALL ITEMS · OFFICIAL TRADE</span><h3>{intent === 'upgrade' ? '寻找同类升级装备' : '全物品查价'}</h3></div><span className="wb-tag">{preset === 't1' ? fullT1 ? '全 T1 数值参考' : 'T1 条件待核对' : nonEquipment ? itemKindLabel(equipment) : equipment.rarity === 'unique' ? '传奇装备' : '实际属性'}</span></div>
@@ -73,12 +124,12 @@ function EquipmentTradeEditor({ equipment, raw, league, onLeague, autoEstimate, 
       {equipment.stateText?.map((state) => <span className="wb-tag" key={state}>{state}</span>)}
       {onCompare && !nonEquipment && <button className="wb-button" onClick={() => onCompare(equipment)}>加入装备比较</button>}
     </div>
-    <p className="wb-fine">选择查价方向后获取市场参考；属性门槛可在“调整搜索条件”中修改。</p>
+    <p className="wb-fine">选择查价方向即可搜索；工坊自动生成条件，无需先了解词缀 roll 范围。</p>
     <label className="wb-form-label">交易赛季<input aria-label="全装备交易赛季" list={listId} value={league} placeholder="填写官网赛季名称" onChange={(event) => onLeague(event.target.value)} /><datalist id={listId}>{leagues.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</datalist></label>
     {leagueError && <p className="wb-fine">{leagueError}</p>}
     <div className="wb-trade-presets with-top" role="group" aria-label="全装备查价预设">{([
       ['similar', '相似查价', '核心三项 · 实际值下限80%'], ['strict', '全部已识别属性', '实际数值 · 未识别项另列'],
-      ['base', equipment.rarity === 'unique' ? '只查同名传奇' : nonEquipment ? '同档物品查价' : '只查底座', nonEquipment ? '保留阶级 / 等级 · 不限定词缀' : '不限定变量与词缀'], ['upgrade', '综合找升级', '沿用当前方向 · 多属性加权排序'],
+      ['base', equipment.rarity === 'unique' ? '只查同名传奇' : nonEquipment ? '同档物品查价' : '只查底座', nonEquipment ? '保留阶级 / 等级 · 不限定词缀' : '不限定变量与词缀'], ['upgrade', '综合找升级', loadoutContext && usesDamageGoal(loadoutContext.state) ? '四抗封顶 · 主技能伤害优先' : '沿用当前方向 · 多属性加权排序'],
       ['t1', '同类全词缀 T1', '全部词缀方向 · 同时满足 T1 门槛'],
     ] as const).filter(([value]) => (!nonEquipment || value !== 'upgrade' && value !== 't1') && (value !== 't1' || equipment.rarity !== 'unique')).map(([value, title, detail]) => <button key={value} disabled={value === 't1' && (!t1 || !equipment.identified)} aria-pressed={preset === value && !custom} className={preset === value && !custom ? 'active' : ''} onClick={() => applyPreset(value)}><strong>{title}</strong><small>{detail}</small></button>)}</div>
     {preset === 't1' && <section className="wb-trade-top" aria-label="全词缀 T1 条件">
@@ -89,12 +140,25 @@ function EquipmentTradeEditor({ equipment, raw, league, onLeague, autoEstimate, 
       {custom && <button className="wb-text-button" type="button" onClick={() => applyPreset('t1')}>重新应用全部 T1 门槛</button>}
     </section>}
     {upgrading && <>
-      {loadoutContext && <p className="wb-description">{liveLoadoutContext(loadoutContext) ? `已关联角色${loadoutSlotLabel(loadoutContext.slot)}。优先属性：${priorityNames(loadoutContext.state.goals.priorities).join('、') || '未设置'}；${loadoutContext.state.goals.build ? `参考 BD 主攻：${loadoutContext.state.goals.build.main.label}，相关已识别词缀按 BD 方向分配相对权重` : '可识别的优先词缀默认权重 3，其余为 1'}。候选同时核对整套抗性目标。` : '来源装备栏已变化，请从角色装备页重新打开升级搜索，以更新比较基准。'}</p>}
-      <p className="wb-description">按当前装备已识别的数值词缀综合挑选，默认每项方向同等重要。权重越高越优先；最低要求留空时允许该项下降，用其他属性弥补。必须保住的抗性、移速或装备面板数值请设置最低要求。</p>
+      {damageMode && <section className="wb-trade-top" aria-label="四抗封顶伤害目标"><h3>配装目标：四抗达到上限，再追求伤害</h3>
+        <p className="wb-fine">火、冰、雷、混沌抗性分别按角色上限约束；溢出抗性、生命和防御不增加伤害分。{damageSort ? '先按武器面板 DPS 找候选，再核对全套抗性。' : '按主技能方向的伤害词缀筛选候选。'}技能最终 DPS 仍需在 PoB2 重算。</p>
+        <p className="wb-fine">{goalGate?.origin ?? '尚无有效角色抗性基准'} · 主技能：{damageSkill(loadoutContext.state)?.label ?? '待导入技能资料'}</p>
+        {skillPlan(loadoutContext.state) && <p className="wb-fine">已按主输出与参考 BD 生成 {activeRows.filter((row) => row.referenceScale).length} 个底座可出现的评分方向，其中 {activeRows.filter((row) => row.suggested).length} 个是旧装备没有的潜在属性。按已核对 T1 量尺比较，不要求同时拥有全部词缀。</p>}
+        <details open={goalGate?.status !== 'met'}><summary>四抗门槛与计算依据 · {goalGate?.status === 'met' ? '当前全部达标' : goalGate?.status === 'unmet' ? '当前仍有缺口' : '需要补齐数据'}</summary>{goalGate?.rows.map((row) => <p key={row.key} className={row.met === false ? 'wb-inline-warning' : 'wb-fine'}>{row.label}：当前 {row.before ?? '未知'}% / 上限 {row.cap ?? '未知'}%{row.requiredOnItem !== undefined && row.requiredOnItem > 0 ? ` · 候选本栏合计至少 ${Number(row.requiredOnItem.toFixed(2))}%` : ''}</p>)}
+        {goalGate?.notes.map((note) => <p key={note} className="wb-inline-warning">{note}</p>)}</details>
+        {constraintOnly && <p className="wb-inline-warning">本栏没有可安全评分的伤害属性，先筛选抗性约束候选并按价格排列；技能伤害需要 PoB2 重算，不用生命或溢出抗性代替伤害分。</p>}
+      </section>}
+      <p className="wb-description" role="status">升级依据：{components.length} 项数值参与排序 · {preserved.length} 项技能 / 机制作为必须保留条件{unknown.length ? ` · ${unknown.length} 项文字未单独筛选` : ''}。进入后自动搜索一次，调整条件后点击重新搜索。</p>
+      {equipment.rarity === 'unique' && <p className="wb-fine">默认比较同名传奇的词缀配置，以保留独有技能与机制；取消“限定同名传奇”可搜索同类装备（含稀有），但需自行核对技能与流派兼容性。升级搜索默认不限腐化状态。</p>}
+      {equipment.slot === 'weapon' && !equipment.properties.some((property) => property.name === 'attacksPerSecond') && <p className="wb-inline-warning">当前 PoB 文本未包含武器的物品面板 DPS，综合分只比较可识别词缀。可复制游戏中的完整武器文字，补充物品伤害与攻速；不会将综合分当作角色伤害提升。</p>}
+      {!damageMode && loadoutContext && <p className="wb-description">{liveLoadoutContext(loadoutContext) ? `已关联角色${loadoutSlotLabel(loadoutContext.slot)}。优先属性：${priorityNames(loadoutContext.state.goals.priorities).join('、') || '未设置'}；${loadoutContext.state.goals.build ? `参考 BD 主攻：${loadoutContext.state.goals.build.main.label}，相关已识别词缀按 BD 方向分配相对权重` : '可识别的优先词缀默认权重 3，其余为 1'}。候选同时核对整套抗性目标。` : '来源装备栏已变化，请从角色装备页重新打开升级搜索，以更新比较基准。'}</p>}
+      {!damageMode && <p className="wb-description">默认按当前装备方向自动排序，无需设置数值下限。需要自动保证整套四抗时，请从角色装备栏的“寻找这件的升级”进入。</p>}
       <div className="wb-actions"><label className="wb-form-label">购买预算上限<input aria-label="升级预算上限" type="number" min="0" step="any" value={budget} placeholder="不限预算" onChange={(event) => setBudget(event.target.value)} /></label>
         <label className="wb-form-label">预算币种<select aria-label="升级预算币种" value={budgetCurrency} onChange={(event) => setBudgetCurrency(event.target.value as 'exalted' | 'divine')}><option value="divine">神圣石</option><option value="exalted">崇高石</option></select></label></div>
     </>}
-    <details className="wb-fold wb-search-conditions"><summary>调整搜索条件 · 已选 {activeRows.filter((row) => row.enabled).length} 项属性{custom ? ' · 已自定义' : ''}</summary><div className="wb-trade-options">
+    {upgrading && <SearchGuidancePanel ambition={ambition} onChoose={chooseGuidance} guideCount={[...guides.values()].filter((guide) => guide.safe && !!guide.top).length}
+      note={guidanceNote} busy={rangeBusy} unique={equipment.rarity === 'unique'} onLookup={equipment.rarity === 'unique' ? () => { void lookupRanges(); } : undefined} />}
+    <details className="wb-fold wb-search-conditions" onToggle={(event) => { if (event.currentTarget.open && equipment.rarity === 'unique' && !rollReference && !rangeBusy && !rangeAttempted) void lookupRanges(); }}><summary>调整搜索条件 · 已选 {activeRows.filter((row) => row.enabled).length} 项属性{custom ? ' · 已自定义' : ''}</summary><div className="wb-trade-options">
       <label className="wb-check"><input type="checkbox" checked={nonEquipment || exactBase} disabled={nonEquipment || !equipment.baseNameEnglish} onChange={(event) => setExactBase(event.target.checked)} />{nonEquipment ? '限定当前物品类型' : '限定当前底座'}</label>
       {equipment.rarity === 'unique' && <label className="wb-check"><input type="checkbox" checked={exactUnique} disabled={!equipment.nameEnglish} onChange={(event) => setExactUnique(event.target.checked)} />限定同名传奇</label>}
       {equipment.kind !== 'currency' && equipment.kind !== 'other' && <label className="wb-check"><input type="checkbox" checked={sameCorruption} onChange={(event) => setSameCorruption(event.target.checked)} />限定相同腐化状态（{equipment.corrupted ? '已腐化' : '未腐化'}）</label>}
@@ -103,14 +167,15 @@ function EquipmentTradeEditor({ equipment, raw, league, onLeague, autoEstimate, 
     {activeRows.length > 0 && <>
       <div className="wb-trade-filter-head"><strong>参与搜索的属性 <span className="wb-count">{activeRows.filter((row) => row.enabled).length} / {activeRows.length}</span></strong><button className="wb-text-button" onClick={() => applyPreset('base')}>清空属性条件</button></div>
       <div className="wb-trade-filters">{activeRows.map((row) => <div key={row.key} className={`wb-trade-filter ${row.enabled ? 'enabled' : ''}`}>
-        <label className="wb-trade-filter-label"><input type="checkbox" aria-label={`搜索属性：${row.label}`} checked={row.enabled} onChange={(event) => edit(row.key, { enabled: event.target.checked })} /><span><strong>{row.label}</strong><small>{row.equipmentFilter ? '装备显示属性' : '已核对官方属性'}{row.actualValue === undefined ? ' · 仅搜索是否存在' : ` · 实际值 ${Math.round(row.actualValue * 100) / 100}`}</small>{row.warning && <small>{row.warning}</small>}</span></label>
-        <div className={`wb-trade-bounds${upgrading && !row.equipmentFilter && !row.presenceOnly ? ' has-weight' : ''}`}>{upgrading && !row.equipmentFilter && !row.presenceOnly && <label>综合权重<input aria-label={`${row.label}权重`} type="number" min="0" max="100" step="any" value={row.weight ?? '1'} disabled={!row.enabled} onChange={(event) => edit(row.key, { weight: event.target.value })} /></label>}
-          <label>{upgrading ? '最低要求' : '下限'}<input aria-label={`${row.label}下限`} type="number" step="any" value={row.min} disabled={!row.enabled} placeholder={upgrading ? '不设硬门槛' : ''} onChange={(event) => edit(row.key, { min: event.target.value })} /></label>
-        <label>上限<input aria-label={`${row.label}上限`} type="number" step="any" value={row.max} disabled={!row.enabled} placeholder="不限" onChange={(event) => edit(row.key, { max: event.target.value })} /></label></div>
+        <label className="wb-trade-filter-label"><input type="checkbox" aria-label={`搜索属性：${row.label}`} checked={row.enabled} disabled={row.locked} onChange={(event) => edit(row.key, { enabled: event.target.checked })} /><span><strong>{row.label}</strong><small>{row.suggested ? 'BD 潜在属性 · 当前装备未拥有' : row.locked ? '抗性封顶硬约束' : row.referenceOnly ? 'Wiki 参考 · 勾选后只要求效果存在' : row.equipmentFilter ? '装备显示属性' : '已核对官方属性'}{row.suggested ? '' : row.actualValue === undefined ? row.locked ? '' : ' · 仅搜索是否存在' : ` · 实际值 ${Math.round(row.actualValue * 100) / 100}`}</small>{row.recommendation && <small>{row.recommendation}</small>}<RollRangeHint guide={guides.get(row.key)} />{row.warning && !row.referenceOnly && <small>{row.warning}</small>}</span></label>
+        <SearchConditionHint row={row} upgrading={upgrading} />
+        {!row.referenceOnly && <details className="wb-trade-manual"><summary>手动调整（高级）</summary><div className={`wb-trade-bounds${upgrading && !row.equipmentFilter && !row.presenceOnly ? ' has-weight' : ''}`}>{upgrading && !row.equipmentFilter && !row.presenceOnly && <label>{damageMode ? '伤害方向权重' : '综合权重'}<input aria-label={`${row.label}权重`} type="number" min="0" max="100" step="any" value={row.weight ?? '1'} disabled={!row.enabled || damageMode && row.weight === '0'} onChange={(event) => edit(row.key, { weight: event.target.value })} /></label>}
+          <label>{upgrading ? '最低要求' : '下限'}<input aria-label={`${row.label}下限`} type="number" step="any" value={row.min} disabled={!row.enabled || row.locked} placeholder={upgrading ? '不设硬门槛' : ''} onChange={(event) => edit(row.key, { min: event.target.value })} /></label>
+        <label>上限<input aria-label={`${row.label}上限`} type="number" step="any" value={row.max} disabled={!row.enabled || row.locked} placeholder="不限" onChange={(event) => edit(row.key, { max: event.target.value })} /></label></div></details>}
         {preset === 't1' && t1?.references.has(row.key) && <p className="wb-trade-top-reference">{t1.references.get(row.key)?.note}</p>}
       </div>)}</div>
     </>}
-    </details>{unknown.length > 0 && <details><summary>未加入交易条件的文字（{unknown.length}）</summary>{unknown.map((mod) => <p className="wb-inline-warning" key={mod.key}><strong>{mod.label}</strong><br />{mod.warning}</p>)}</details>}
+    </details><AffixReferencePanel equipment={equipment} onReference={preset === 't1' ? undefined : (reference) => { setRollReference(reference); setRows((old) => mergeReferenceRows(old, reference)); }} />
     {!!equipment.flavourText?.length && <details><summary>装备背景文字</summary>{equipment.flavourText.map((line, index) => <p className="wb-fine" key={index}>{line}</p>)}</details>}
     {!!equipment.descriptionText?.length && <details><summary>物品说明</summary>{equipment.descriptionText.map((line, index) => <p className="wb-fine" key={index}>{line}</p>)}</details>}
     {result?.warnings.map((warning, number) => <p className="wb-inline-warning" key={number}>{warning}</p>)}
@@ -118,7 +183,7 @@ function EquipmentTradeEditor({ equipment, raw, league, onLeague, autoEstimate, 
     {result && <>
       <div className="wb-actions"><a className="wb-button primary" href={result.url} target="_blank" rel="noopener noreferrer">{fullT1 ? '打开同类全 T1 搜索' : upgrading ? '打开升级候选搜索' : '打开官方交易搜索'}</a></div>
       <p className="wb-fine">{noStats ? '低置信参考：当前只有同名、底座或类别条件。' : '挂牌参考：只比较当前勾选条件，无法衡量所有机制与组合价值。'}{preset === 't1' ? '随机词缀门槛来自 T1 规则参考，原装备实际值另列；' : '每条属性来自复制数值；'}范围伤害按交易网站的平均值搜索。</p>
-      {upgrading ? <UpgradeCandidates key={JSON.stringify(result.query)} query={result.query} url={result.url} league={league} components={upgradeComponents(rows)} onCompare={onCompare} itemRaw={raw}
+      {upgrading ? <UpgradeCandidates key={JSON.stringify(result.query)} query={result.query} url={result.url} league={league} components={upgradeComponents(activeRows)} scoringRows={activeRows} auto={!hasSearched && !raw.includes(POB_REVIEW_MARKER)} onSearch={() => setHasSearched(true)} onCompare={onCompare ? (item) => onCompare(item, captureUpgradeSearch(loadoutContext, activeRows)) : undefined} itemRaw={raw}
         loadoutContext={loadoutContext && liveLoadoutContext(loadoutContext) ? loadoutContext : undefined} />
         : <PriceEstimate query={result.query} url={result.url} league={league} auto={autoEstimate} onEstimate={onEstimate} itemRaw={raw}
           onRecordQuote={preset === 'similar' || preset === 'strict' ? onRecordQuote : undefined}

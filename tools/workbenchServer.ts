@@ -10,6 +10,7 @@ import tradeItems from '../src/workbench/data/trade-item-index.json';
 import { createLocalPobService, LocalPobError } from './localPob';
 import { createLocalGameDataService } from './localGameData';
 import { createTradeLogService } from './tradeLog';
+import { createAffixReferenceService, AffixReferenceError } from './affixReference';
 
 const OFFICIAL = 'https://www.pathofexile.com';
 const MAX_BODY = 65_536;
@@ -109,8 +110,12 @@ export function validateEstimate(value: unknown): { league: string; search: Json
     }
   }
   const ranked = object(value.search.sort) && value.search.sort['statgroup.0'] === 'desc';
+  const damageSort = object(value.search.sort) && value.search.sort.dps === 'desc';
+  if (damageSort && (!object(query.filters) || !object(query.filters.type_filters) || !object(query.filters.type_filters.filters)
+    || !object(query.filters.type_filters.filters.category) || typeof query.filters.type_filters.filters.category.option !== 'string'
+    || !query.filters.type_filters.filters.category.option.startsWith('weapon.'))) throw new WorkbenchRequestError(400, '武器 DPS 排序只适用于明确的武器类别。');
   if (ranked && (!object(query.stats[0]) || query.stats[0].type !== 'weight' || !Array.isArray(query.stats[0].filters) || !query.stats[0].filters.length)) throw new WorkbenchRequestError(400, '综合排序需要有效的加权条件。');
-  return { league: value.league.trim(), search: { query, sort: ranked ? { 'statgroup.0': 'desc' } : { price: 'asc' } } };
+  return { league: value.league.trim(), search: { query, sort: damageSort ? { dps: 'desc' } : ranked ? { 'statgroup.0': 'desc' } : { price: 'asc' } } };
 }
 
 /** Absolute deadline from Retry-After and the official dynamic rate-limit state. */
@@ -202,11 +207,12 @@ export function createEstimateService(options: EstimateServiceOptions = {}) {
         }
       }
       const summary = summarizeListingPrices(listings);
-      const ranked = object(search.sort) && search.sort['statgroup.0'] === 'desc';
+      const damageSort = object(search.sort) && search.sort.dps === 'desc';
+      const ranked = object(search.sort) && (search.sort['statgroup.0'] === 'desc' || damageSort);
       const context = estimateQueryContext(search);
       const confidence = estimateConfidence(context, summary.groups);
       if (summary.groups.some((group) => group.count < 5)) warnings.push('部分币种少于 5 个卖家，样本很少，区间仅供核对。');
-      if (ranked) warnings.push('取官方加权排序靠前的最多 20 件候选；排名只代表所选词缀与权重，不等同于流派实战最优。');
+      if (ranked) warnings.push(damageSort ? '取官方武器面板 DPS 排序靠前的最多 20 件候选，实际技能伤害需要 PoB2 重算。' : '取官方加权排序靠前的最多 20 件候选；排名只代表所选词缀与权重，不等同于流派实战最优。');
       else if (found.total > ids.length) warnings.push('样本来自价格升序最前面的挂单，偏向市场低价，不能当作全市场中位数。');
       if (summary.groups.length > 1) warnings.push('不同币种分别统计，未使用汇率换算或混算。');
       if (!ranked) warnings.push(...confidence.reasons);
@@ -276,6 +282,7 @@ export function createWorkbenchBridge(options: EstimateServiceOptions & { localP
   const localPob = options.localPob ?? createLocalPobService();
   const localGameData = options.localGameData ?? createLocalGameDataService();
   const tradeLog = options.tradeLog ?? createTradeLogService();
+  const affixReference = createAffixReferenceService(options);
   // Explicit desktop-to-browser views are separate from live tasks: opening a
   // completed item must not replay a checkpoint or replace another price check.
   const views = new Map<string, ClipboardPacket>();
@@ -320,6 +327,9 @@ export function createWorkbenchBridge(options: EstimateServiceOptions & { localP
     const url = new URL(request.url ?? '/', 'http://127.0.0.1');
     const route = url.pathname;
     try {
+      if (route === '/api/workbench/affix-reference' && request.method === 'POST') {
+        writeJson(response, 200, { ok: true, ...await affixReference(await jsonBody(request)) }); return;
+      }
       if (route === '/api/workbench/health' && request.method === 'GET') {
         writeJson(response, 200, { ok: true, app: 'poe2-craft-workbench' }); return;
       }
@@ -422,8 +432,8 @@ export function createWorkbenchBridge(options: EstimateServiceOptions & { localP
       }
       writeJson(response, 404, { ok: false, error: { kind: 'invalid', message: '本地接口不存在。' } });
     } catch (error) {
-      writeJson(response, error instanceof WorkbenchRequestError || error instanceof LocalPobError ? error.status : 500, {
-        ok: false, error: { kind: 'invalid', message: error instanceof WorkbenchRequestError || error instanceof LocalPobError ? error.message : '本地请求暂时失败。' },
+      writeJson(response, error instanceof WorkbenchRequestError || error instanceof LocalPobError || error instanceof AffixReferenceError ? error.status : 500, {
+        ok: false, error: { kind: 'invalid', message: error instanceof WorkbenchRequestError || error instanceof LocalPobError || error instanceof AffixReferenceError ? error.message : '本地请求暂时失败。' },
       });
     }
   }

@@ -16,6 +16,7 @@ const paths: Record<string, ReactNode> = {
   download: <path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" />,
   close: <path d="m6 6 12 12M6 18 18 6" />,
   ledger: <path d="M6 3h13v18H6zM3 7h6M3 12h6M3 17h6M12 8h4M12 13h4" />,
+  chart: <path d="M4 3v18h17M8 17v-5M13 17V8M18 17V4" />,
 };
 export default function WorkbenchIcon({ name, size = 18 }: { name: string; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] ?? paths.ring}</svg>;

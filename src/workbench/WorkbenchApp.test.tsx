@@ -15,14 +15,14 @@ import WorkbenchApp from './WorkbenchApp';
 
 vi.mock('../lib/engine', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/engine')>();
-  return { ...actual, loadEngine: vi.fn(async () => engine) };
+  return { ...actual, loadEngine: vi.fn(() => Promise.resolve(engine)) };
 });
 vi.mock('./market', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./market')>();
   return {
     ...actual,
-    fetchTradeLeagues: vi.fn(async () => [{ id: 'Forbidden Rites', label: 'Forbidden Rites' }]),
-    loadGearTrade: vi.fn(async () => ({ rows: [], mods: {} })),
+    fetchTradeLeagues: vi.fn(() => Promise.resolve([{ id: 'Forbidden Rites', label: 'Forbidden Rites' }])),
+    loadGearTrade: vi.fn(() => Promise.resolve({ rows: [], mods: {} })),
   };
 });
 // Workbench uses its own worker protocol, separate from the upstream test Worker stand-in.

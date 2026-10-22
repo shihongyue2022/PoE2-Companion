@@ -338,3 +338,9 @@ This project is licensed under the GNU Affero General Public License v3.0 (AGPL-
 ---
 
 **Note**: This is a third-party tool and is not affiliated with or endorsed by Grinding Gear Games.
+
+词缀资料已整合到装备页和查价页的「词缀资料」折叠区。展开后按英文物品名查询英文资料，界面映射为简体中文；可核对的缺失效果会作为未勾选的可选检索条件，不修改装备原有数值。详细行为见 [WORKBENCH.md](WORKBENCH.md)。
+
+装备页的「技能与构成」可读取 PoB2 主技能、辅助宝石和保存时伤害，并按栏位查看装备属性来源。旧记录点击「补读原 PoB2 的技能与伤害」即可补充资料；换装不会自动重算技能 DPS。
+
+「智能配装」按参考 BD、主输出与启用辅助生成升级方向，可切换主输出技能。稀有装备会从底座词池补充原装备没有的潜在伤害词缀，四抗封顶后排序；搜索与换装比较共用评分。评分是筛选参考，实际技能 DPS 仍需 PoB2 重算。

@@ -6,6 +6,7 @@ import { tradeLineRangeMapping } from './tradeSearch';
 
 export interface EquipmentT1Reference {
   status: 't1' | 'fixed' | 'unverified'; note: string; min?: number; max?: number; requiredLevel?: number;
+  roll?: { min: number; max: number };
 }
 export interface EquipmentT1Result {
   rows: EquipmentTradeRow[]; references: ReadonlyMap<string, EquipmentT1Reference>; issues: string[];
@@ -17,13 +18,13 @@ const allPoolIds = (base: ItemBase): string[] => [...new Set([
   ...base.pools.essence.prefixes, ...base.pools.essence.suffixes,
 ])];
 
-function referenceFor(modifier: EquipmentMod, pool: readonly Mod[], data: PatchData, trade: GearTrade): EquipmentT1Reference {
+export function referenceFor(modifier: EquipmentMod, pool: readonly Mod[], data: PatchData, trade: GearTrade): EquipmentT1Reference {
   const placements = new Set(modifier.ids.map((id) => id.split('.')[0]));
   if (['implicit', 'enchant', 'rune'].some((origin) => placements.has(origin))) return { status: 'fixed', note: '固定／附魔／符文效果不按普通词缀评 T1；保留原属性条件。' };
   if (!modifier.searchable || !modifier.ref) return { status: 'unverified', note: '尚未识别为唯一的官方交易属性，不能确认 T1。' };
   const expected = hashes(modifier.ids);
   const source = placements.has('desecrated') && !placements.has('explicit') && !placements.has('fractured') ? 'desecrated' : 'normal';
-  const candidates: { min?: number; max?: number; requiredLevel: number; fixed: boolean; family: string; source: string }[] = [];
+  const candidates: { min?: number; max?: number; roll?: { min: number; max: number }; requiredLevel: number; fixed: boolean; family: string; source: string }[] = [];
   for (const mod of pool) {
     if (mod.rune || modifier.affixType && mod.type !== modifier.affixType) continue;
     // Desecration can mark an ordinary mod too; prefer its special pool only when it actually matches.
@@ -58,16 +59,16 @@ function referenceFor(modifier: EquipmentMod, pool: readonly Mod[], data: PatchD
       const previousHigh = previous ? matchEquipmentStat(render(1, previous)).value : undefined;
       const lowerIsBetter = previousLow !== undefined && previousHigh !== undefined
         ? min + max < previousLow + previousHigh : modifier.value !== undefined && modifier.value < 0;
-      candidates.push({ ...(lowerIsBetter ? { max } : { min }), requiredLevel: tier.ilvl, fixed: false, family: mod.family, source: mod.source });
+      candidates.push({ ...(lowerIsBetter ? { max } : { min }), roll: { min, max }, requiredLevel: tier.ilvl, fixed: false, family: mod.family, source: mod.source });
     }
   }
   const preferred = source === 'desecrated' && candidates.some((candidate) => candidate.source === 'desecrated') ? candidates.filter((candidate) => candidate.source === 'desecrated') : candidates;
   if (!preferred.length) return { status: 'unverified', note: '当前底座词池没有可核对的 T1 阶层；不会沿用原数值冒充 T1。' };
-  const signatures = new Set(preferred.map(({ min, max, fixed, family, source }) => JSON.stringify({ min, max, fixed, family, source })));
+  const signatures = new Set(preferred.map(({ min, max, roll, fixed, family, source }) => JSON.stringify({ min, max, roll, fixed, family, source })));
   if (signatures.size !== 1) return { status: 'unverified', note: '此属性可能来自不同词缀或混合词缀，T1 范围不唯一。请使用 Ctrl+Alt+C 高级复制后核对前后缀。' };
   const found = preferred[0]!;
   return found.fixed ? { status: 'fixed', note: '此效果在规则中只有固定机制，没有可提高的数值阶层。' }
-    : { status: 't1', min: found.min, max: found.max, requiredLevel: found.requiredLevel,
+    : { status: 't1', min: found.min, max: found.max, roll: found.roll, requiredLevel: found.requiredLevel,
       note: `T1 参考${found.max === undefined ? '下限' : '上限'} ${found.min ?? found.max} · 规则 ${data.patch} · 所需物等 ${found.requiredLevel}` };
 }
 
