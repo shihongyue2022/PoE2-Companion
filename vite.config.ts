@@ -216,6 +216,9 @@ export default defineConfig({
   server: {
     port: 5173,
     host: '127.0.0.1',
+    fs: {
+      deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/.local-tools/**'],
+    },
     proxy: {
       '/api/poe/leagues': {
         target: 'https://www.pathofexile.com',

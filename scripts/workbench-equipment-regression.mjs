@@ -22,7 +22,6 @@ await mkdir('artifacts/workbench', { recursive: true });
 try {
   assert.deepEqual(await (await page.request.get(`${baseUrl}/api/workbench/health`)).json(), { ok: true, app: 'poe2-craft-workbench' });
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
-  await page.locator('.wb-pool-row').first().waitFor({ state: 'attached' });
   await page.getByRole('navigation', { name: '工作区域' }).getByRole('button', { name: '制作策略' }).click();
   await page.getByRole('button', { name: '粘贴游戏物品' }).click();
   await page.getByRole('button', { name: '试用戒指示例' }).click();
@@ -38,12 +37,14 @@ try {
   assert.deepEqual(normalizeCraftSession(await page.evaluate(() => localStorage.getItem('poe2-workbench-v1'))), normalizeCraftSession(craftBefore));
   pass('game-style 15-slot inventory imports armour independently of the crafting item');
 
+  await loadout.locator('.lo-comparison > summary').click();
   await loadout.getByLabel('粘贴候选装备').fill(betterBoots);
   await loadout.getByText('已比较属性提升', { exact: true }).waitFor();
   assert.match(await loadout.locator('.lo-deltas').innerText(), /\+20/);
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('poe2-workbench-loadout-v1')).slots.boots), boots);
   await loadout.getByRole('button', { name: /^采用候选/ }).click();
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('poe2-workbench-loadout-v1')).slots.boots), betterBoots);
+  await loadout.locator('.lo-comparison > summary').click();
   await loadout.getByLabel('粘贴候选装备').fill(boots);
   await loadout.getByText('已比较属性下降', { exact: true }).waitFor();
   await loadout.getByLabel('粘贴候选装备').fill(betterBoots.replace('+120(110-120)', '+150(140-150)').replace('+35(31-35)', '+10(10-15)'));
@@ -66,7 +67,7 @@ try {
   await page.reload({ waitUntil: 'networkidle' });
   await nav.getByRole('button', { name: '角色装备' }).click();
   await loadout.getByLabel('选择装备栏位').selectOption('boots');
-  await loadout.locator('.lo-item-title').getByText('Dawn Trail', { exact: true }).waitFor();
+  await loadout.locator('.lo-item-title').getByTitle('Dawn Trail', { exact: true }).waitFor();
   pass('the saved set survives reload and temporary candidate text survives a pricing round-trip');
 
   await loadout.getByLabel('选择装备栏位').selectOption('mainHand');

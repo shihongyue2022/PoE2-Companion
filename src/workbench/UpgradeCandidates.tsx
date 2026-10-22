@@ -5,14 +5,17 @@ import type { FlexibleTradeDocument } from './tradeSearch';
 import { equipmentFromListing, scoreUpgrade, type UpgradeComponent } from './upgradeRanking';
 import { TradeMemoryActions } from './TradeMemoryActions';
 import { rememberTrade } from './tradeMemory';
+import type { LoadoutContext } from './loadoutIntegration';
+import { compareCandidate, slotLabel } from './loadout';
 
 interface Props {
   query: FlexibleTradeDocument; url: string; league: string; components: readonly UpgradeComponent[];
   onCompare?: (equipment: Equipment) => void;
   itemRaw?: string;
+  loadoutContext?: LoadoutContext;
 }
 const number = (value: number) => Number(value.toFixed(2)).toLocaleString('zh-CN');
-export default function UpgradeCandidates({ query, url, league, components, onCompare, itemRaw }: Props) {
+export default function UpgradeCandidates({ query, url, league, components, onCompare, itemRaw, loadoutContext }: Props) {
   const [result, setResult] = useState<MarketEstimateResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -53,7 +56,8 @@ export default function UpgradeCandidates({ query, url, league, components, onCo
   }
   const candidates = result?.ok ? (result.listings ?? []).flatMap((listing, index) => {
     const equipment = equipmentFromListing(listing);
-    return equipment ? [{ listing, equipment, index, ...scoreUpgrade(equipment, components) }] : [];
+    return equipment ? [{ listing, equipment, index, ...scoreUpgrade(equipment, components),
+      comparison: loadoutContext ? compareCandidate(loadoutContext.state, loadoutContext.slot, equipment) : undefined }] : [];
   }).sort((a, b) => b.score - a.score || a.index - b.index) : [];
   return <section className="wb-price-estimate" aria-label="市场综合候选">
     <div className="wb-row wb-wrap"><h3>按当前方向综合挑选</h3>
@@ -74,6 +78,9 @@ export default function UpgradeCandidates({ query, url, league, components, onCo
         <div className="wb-row wb-wrap"><strong>#{index + 1} {localizeEquipmentName(candidate.listing.name || candidate.listing.base)}</strong>
           <span>综合分 {number(candidate.score)} · {candidate.improved ? '+' : ''}{number(candidate.score - 100)}%</span>
           <span>{number(candidate.listing.price.amount)} {estimateCurrencyName(candidate.listing.price.currency)}</span></div>
+        {candidate.comparison && <div className="wb-fine"><p>角色{slotLabel(loadoutContext!.slot)}：{candidate.comparison.title} · {candidate.comparison.priorityDirection}</p>
+          {candidate.comparison.targets.map((target) => <p key={target.key}>{target.label}：换后 {number(target.after)}% / 目标 {target.minimum}% · {target.met ? '达标' : '未达标'}</p>)}
+          {!!candidate.comparison.warnings.length && <p>{candidate.comparison.warnings.join(' ')}</p>}</div>}
         <p>{localizeEquipmentName(candidate.listing.base)} · {candidate.tradeoff ? '有取舍，含下降属性' : candidate.improved ? '已计分属性提升' : '已计分属性未提升'}</p>
         <details><summary>查看评分依据与具体差值</summary>
           {candidate.parts.map((part) => <p key={part.key}>{part.label}：{number(part.baseline)} → {number(part.after)}（{part.delta > 0 ? '+' : ''}{number(part.delta)}）</p>)}

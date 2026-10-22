@@ -184,6 +184,7 @@ export function parseWorkbenchItem(
   if (originalParsed.corrupted) blockingReasons.push('这件装备已污染，不能继续使用当前规划器支持的制作通货。');
   if (normalizedLines.includes('Mirrored')) blockingReasons.push('这件装备已复制，不能继续制作。');
   if (normalizedLines.includes('Unmodifiable')) blockingReasons.push('这件装备不可调整，不能继续制作。');
+  if (normalizedLines.some((line) => /^(?:Sanctified|(?:已)?圣化)$/i.test(toSimplified(line)))) blockingReasons.push('这件装备已圣化，当前制作规划器不支持继续修改。');
   if (normalizedLines.includes('Unidentified')) blockingReasons.push('装备尚未鉴定，无法读取已有词缀。');
   warnings.push(...blockingReasons);
 

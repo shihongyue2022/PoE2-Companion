@@ -180,7 +180,7 @@ function TradeSearchEditor({ data, tradeData, item, baseName, league, initialRow
       <p className="wb-fine">默认提升核心属性；可勾选其他词缀，再切换档位应用门槛。总抗性可比较不同抗性组合。“保留全部词缀方向”改为逐条匹配，结果较少时可选至少满足其中几项。缺少实际掷值时使用阶层参考。T1 参考来自当前规则快照，品质或特殊效果可能使显示值更高，搜索结果不代表整个市场的绝对排名。</p>
       {topReference?.warnings.map((warning, index) => <p className="wb-inline-warning" key={index}>{warning}</p>)}
     </div>}
-    <div className="wb-trade-options">
+    <details className="wb-fold"><summary>调整搜索条件 · 已选 {activeCount} 项属性</summary><div className="wb-trade-options">
       <label className="wb-check"><input type="checkbox" checked={exactBase} onChange={(event) => setExactBase(event.target.checked)} />限定当前底座</label>
       <label className="wb-check"><input type="checkbox" checked={limitLevel} onChange={(event) => setLimitLevel(event.target.checked)} />限制物品等级</label>
       <label className="wb-trade-status">稀有度<select aria-label="交易稀有度" value={rarity} onChange={(event) => setRarity(event.target.value as typeof rarity)}><option value="nonunique">非传奇</option><option value="normal">普通（白色）</option><option value="magic">魔法（蓝色）</option><option value="rare">稀有（黄色）</option></select></label>
@@ -200,7 +200,7 @@ function TradeSearchEditor({ data, tradeData, item, baseName, league, initialRow
       <p className="wb-fine">附加伤害的交易数值为最小值和最大值的平均数。下限与上限留空时，只要求存在该属性。品质加成直接采用复制文本中的显示值。</p>
     </>}
     {!rows.length && source !== 'base' && <p className="wb-fine">当前没有可生成的词缀条件，可以先搜索同类底座，或导入装备后再选属性。</p>}
-    {[...new Set([...warnings, ...(search?.warnings ?? []).filter((warning) => !rows.some((row) => row.warning === warning))])].map((warning, index) => <p className="wb-inline-warning" key={index}>{warning}</p>)}
+    </details>{[...new Set([...warnings, ...(search?.warnings ?? []).filter((warning) => !rows.some((row) => row.warning === warning))])].map((warning, index) => <p className="wb-inline-warning" key={index}>{warning}</p>)}
     <div className="wb-trade-summary" aria-live="polite"><strong>{exactBase ? translateBase(baseName) : item.baseId === 'Rings' ? '全部戒指' : '全部项链'}</strong><span>{limitLevel ? `物等 ${levelMin || '不限'}～${levelMax || '不限'}` : '不限物等'}</span><span>{{ nonunique: '非传奇', normal: '普通', magic: '魔法', rare: '稀有' }[rarity]}</span><span>{activeCount ? `${activeCount} 项属性${matching === 'count' ? `中至少 ${minMatches} 项` : '全部匹配'}` : '不限词缀'}</span><span>{preset === 'custom' ? '自定义条件' : source === 'base' ? '底材搜索' : '可继续调整'}</span></div>
     {error && <p className="wb-inline-warning" role="alert">{error}</p>}
     {search && <a className="wb-button primary wb-trade-link" href={search.url} target="_blank" rel="noreferrer">在官方交易网站搜索 ↗</a>}

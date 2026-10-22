@@ -7,6 +7,9 @@ import {
 } from '../src/workbench/marketEstimate';
 import { TRADE_CATEGORY } from '../src/lib/gearTrade';
 import tradeItems from '../src/workbench/data/trade-item-index.json';
+import { createLocalPobService, LocalPobError } from './localPob';
+import { createLocalGameDataService } from './localGameData';
+import { createTradeLogService } from './tradeLog';
 
 const OFFICIAL = 'https://www.pathofexile.com';
 const MAX_BODY = 65_536;
@@ -268,8 +271,11 @@ const writeJson = (response: ServerResponse, status: number, value: unknown): vo
   response.end(JSON.stringify(value));
 };
 
-export function createWorkbenchBridge(options: EstimateServiceOptions = {}) {
+export function createWorkbenchBridge(options: EstimateServiceOptions & { localPob?: ReturnType<typeof createLocalPobService>; localGameData?: ReturnType<typeof createLocalGameDataService>; tradeLog?: ReturnType<typeof createTradeLogService> } = {}) {
   const estimate = createEstimateService(options);
+  const localPob = options.localPob ?? createLocalPobService();
+  const localGameData = options.localGameData ?? createLocalGameDataService();
+  const tradeLog = options.tradeLog ?? createTradeLogService();
   // Explicit desktop-to-browser views are separate from live tasks: opening a
   // completed item must not replay a checkpoint or replace another price check.
   const views = new Map<string, ClipboardPacket>();
@@ -316,6 +322,32 @@ export function createWorkbenchBridge(options: EstimateServiceOptions = {}) {
     try {
       if (route === '/api/workbench/health' && request.method === 'GET') {
         writeJson(response, 200, { ok: true, app: 'poe2-craft-workbench' }); return;
+      }
+      if (route === '/api/workbench/trade-log' && request.method === 'GET') {
+        writeJson(response, 200, { ok: true, ...await tradeLog.read(url.searchParams.get('history') === '1') }); return;
+      }
+      if (route === '/api/workbench/game-data' && request.method === 'GET') {
+        writeJson(response, 200, { ok: true, ...await localGameData.summary() }); return;
+      }
+      if (route === '/api/workbench/game-build' && request.method === 'POST') {
+        const value = await jsonBody(request);
+        if (!object(value) || typeof value.id !== 'string' || typeof value.level !== 'number' || !Number.isInteger(value.level)
+          || value.level < 1 || value.level > 100 || ![1, 2].includes(value.weaponSet as number)) throw new WorkbenchRequestError(400, '请选择规划文件、有效等级和武器组。');
+        const analysis = await localGameData.readPlan(value.id, value.level, value.weaponSet as number);
+        if (!analysis) throw new WorkbenchRequestError(404, '规划文件无法读取或已变化，请重新检查游戏目录。');
+        writeJson(response, 200, { ok: true, analysis }); return;
+      }
+      if (route === '/api/workbench/pob/builds' && request.method === 'GET') {
+        writeJson(response, 200, { ok: true, ...await localPob.list() }); return;
+      }
+      if (route === '/api/workbench/pob/build' && request.method === 'POST') {
+        const value = await jsonBody(request);
+        if (!object(value)) throw new WorkbenchRequestError(400, '请选择本机保存的角色。');
+        writeJson(response, 200, { ok: true, ...await localPob.read(value.id) }); return;
+      }
+      if (route === '/api/workbench/pob/launch' && request.method === 'POST') {
+        await jsonBody(request);
+        await localPob.launch(); writeJson(response, 200, { ok: true }); return;
       }
       if (route === '/api/workbench/companion-view' && request.method === 'POST') {
         const parsed = validateClipboard(await jsonBody(request));
@@ -390,8 +422,8 @@ export function createWorkbenchBridge(options: EstimateServiceOptions = {}) {
       }
       writeJson(response, 404, { ok: false, error: { kind: 'invalid', message: '本地接口不存在。' } });
     } catch (error) {
-      writeJson(response, error instanceof WorkbenchRequestError ? error.status : 500, {
-        ok: false, error: { kind: 'invalid', message: error instanceof WorkbenchRequestError ? error.message : '本地请求暂时失败。' },
+      writeJson(response, error instanceof WorkbenchRequestError || error instanceof LocalPobError ? error.status : 500, {
+        ok: false, error: { kind: 'invalid', message: error instanceof WorkbenchRequestError || error instanceof LocalPobError ? error.message : '本地请求暂时失败。' },
       });
     }
   }
@@ -406,6 +438,12 @@ export function workbenchServerPlugin(): Plugin {
     name: 'local-workbench-companion',
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
+        // Portable app settings may contain its own OAuth session. Never serve these as web assets.
+        let assetPath = '';
+        try { assetPath = decodeURIComponent((request.url ?? '').split('?')[0]!); } catch { /* Vite handles malformed URLs. */ }
+        if (assetPath.split('\\').join('/').toLowerCase().split('/').includes('.local-tools')) {
+          writeJson(response, 403, { ok: false }); return;
+        }
         if ((request.url ?? '').startsWith('/api/workbench/')) void bridge.handle(request, response);
         else next();
       });

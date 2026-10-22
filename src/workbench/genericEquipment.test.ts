@@ -7,6 +7,31 @@ import { BOOTS_SAMPLE, WEAPON_SAMPLE } from './fixtures/fullGear';
 import { IGNIFERIS_SAMPLE } from './fixtures/igniferis';
 
 describe('all equipment clipboard parsing and market searches', () => {
+  it('localizes constant mechanics and marked PoB lines without inventing searchable trade mappings', async () => {
+    const { localizeEquipmentStat, matchEquipmentStat, equipmentDisplayName } = await import('./genericEquipment');
+    const mechanic = 'Life Leech recovers based on your Lightning damage as well as Physical damage';
+    const translated = localizeEquipmentStat(mechanic);
+    expect(translated).toContain('生命偷取');
+    expect(translated).not.toContain('Life Leech');
+    const uncertain = matchEquipmentStat('25% increased Melee Strike Range with this weapon [PoB数值待游戏文本核对]');
+    expect(uncertain.label).toContain('此武器增加25%近战打击范围');
+    expect(uncertain.label).toContain('[PoB数值待游戏文本核对]');
+    expect(uncertain).toMatchObject({ searchable: false, ids: [] });
+    expect(localizeEquipmentStat('Create a Fragment of Divinity in your Presence every 4 seconds')).toContain('每4秒');
+    expect(matchEquipmentStat('Grants Skill: Spear Throw')).toMatchObject({ label: '赋予技能: 长矛投掷', searchable: false, ids: [] });
+    expect(matchEquipmentStat('Bonded: 20% reduced Slowing Potency of Debuffs on You (rune)')).toMatchObject({ label: '命定：减少20%你身上的减益效果缓速程度', searchable: false, ids: [] });
+    expect(localizeEquipmentStat('Uncatalogued effect 123')).toBe('Uncatalogued effect 123');
+    const item = parseEquipment('Rarity: UNIQUE\nThe Ordained\nSolemn Spear\n--------\nItem Level: 84')!;
+    expect(equipmentDisplayName(item)).toBe('神授命使');
+    expect(item.name).toBe('The Ordained');
+  });
+  it('keeps sanctification and ward out of the affix list while displaying their actual state and value', () => {
+    const item = parseEquipment('Rarity: RARE\nImported Amulet\nGold Amulet\n--------\nItem Level: 82\nWard: 34\n--------\n+157 to maximum Mana\nSanctified')!;
+    expect(item).toMatchObject({ sanctified: true, stateText: ['已圣化'] });
+    expect(item.mods).toHaveLength(1);
+    expect(item.properties).toContainEqual(expect.objectContaining({ name: 'ward', label: '符文保护', values: [34] }));
+    expect(equipmentMetrics(item)).toMatchObject({ mana: 157 });
+  });
   it('recognizes all six Igniferis effects and keeps its flavour text outside the unmatched modifiers', () => {
     const parsed = parseEquipment(IGNIFERIS_SAMPLE)!;
     expect(parsed.nameEnglish).toBe('Igniferis');

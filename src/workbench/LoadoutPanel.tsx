@@ -1,24 +1,28 @@
 import { useMemo, useState } from 'react';
-import { equipmentMetricDetails, localizeEquipmentName, localizeEquipmentProperty, parseEquipment, type Equipment } from './genericEquipment';
+import { equipmentDisplayName, equipmentMetricDetails, localizeEquipmentName, localizeEquipmentProperty, localizeEquipmentStat, parseEquipment, type Equipment } from './genericEquipment';
 import {
-  compareCandidate, deserializeLoadout, emptyLoadout, equipRaw, isLoadoutSlot, LOADOUT_SLOTS,
-  LOADOUT_STORAGE_KEY, loadoutTotals, loadoutWarnings, METRICS, removeSlot, RESISTANCE_KEYS,
+  compareCandidate, deserializeLoadout, equipRaw, isLoadoutSlot, LOADOUT_SLOTS,
+  loadoutTotals, loadoutWarnings, METRICS, removeSlot, RESISTANCE_KEYS,
   serializeLoadout, slotLabel, type LoadoutSlot, type LoadoutState, type MetricKey,
 } from './loadout';
 import './loadout.css';
 import CharacterPanelCalibration from './CharacterPanelCalibration';
 import PobImportPanel from './PobImportPanel';
 import { validCharacterPanel } from './characterPanel';
+import { useSavedLoadout, writeSavedLoadout } from './loadoutStore';
+import LoadoutSourcePanel from './LoadoutSourcePanel';
+import { applyPobLoadout, chooseComparisonSlot } from './loadoutIntegration';
+import LoadoutQuoteSummary from './LoadoutQuoteSummary';
+import LocalGameDataPanel from './LocalGameDataPanel';
+import BuildAdvicePanel from './BuildAdvicePanel';
+import Icon from './WorkbenchIcon';
+import SocketComparisonControls from './SocketComparisonControls';
 
 export interface LoadoutPanelProps {
-  onPrice: (raw: string, intent?: 'price' | 'upgrade') => void;
+  onPrice: (raw: string, intent?: 'price' | 'upgrade', slot?: LoadoutSlot) => void;
   onCraft?: (raw: string) => void;
   league?: string;
-}
-
-function readSaved(): LoadoutState {
-  try { return deserializeLoadout(localStorage.getItem(LOADOUT_STORAGE_KEY) ?? '').state ?? emptyLoadout(); }
-  catch { return emptyLoadout(); }
+  candidate?: { id: string; raw: string; slot?: LoadoutSlot };
 }
 const format = (value: number) => value.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
 const deltaText = (value: number, unit = '') => `${value > 0 ? '+' : ''}${format(value)}${unit}`;
@@ -47,35 +51,40 @@ function EquipmentArt({ item, kind }: { item: Equipment | null; kind: string }) 
     : <SlotGlyph kind={kind} />;
 }
 
-export default function LoadoutPanel({ onPrice, onCraft, league }: LoadoutPanelProps) {
-  const [loadout, setLoadout] = useState<LoadoutState>(readSaved);
-  const [selected, setSelected] = useState<LoadoutSlot>('mainHand');
+export default function LoadoutPanel({ onPrice, onCraft, league, candidate: incoming }: LoadoutPanelProps) {
+  const saved = useSavedLoadout(), loadout = saved.state;
+  const [selected, setSelected] = useState<LoadoutSlot>(incoming?.slot ?? 'mainHand');
   const [importText, setImportText] = useState('');
-  const [candidateText, setCandidateText] = useState('');
-  const [notice, setNotice] = useState('');
+  const [candidateText, setCandidateText] = useState(incoming?.raw ?? '');
+  const [notice, setNotice] = useState(incoming ? '市场候选已放入比较区，尚未替换装备。请核对目标栏位及差值。' : '');
   const [error, setError] = useState('');
   const [storageError, setStorageError] = useState('');
+  const [socketCounts, setSocketCounts] = useState<{ before?: { raw: string; filled: number }; after?: { raw: string; filled: number } }>({});
   const [backupText, setBackupText] = useState('');
   const selectedItem = useMemo(() => parseEquipment(loadout.slots[selected] ?? ''), [loadout.slots, selected]);
   const candidate = useMemo(() => parseEquipment(candidateText), [candidateText]);
-  const comparison = useMemo(() => candidate ? compareCandidate(loadout, selected, candidate) : null, [candidate, loadout, selected]);
+  const beforeFilled = socketCounts.before?.raw === selectedItem?.raw ? socketCounts.before?.filled : undefined;
+  const afterFilled = socketCounts.after?.raw === candidate?.raw ? socketCounts.after?.filled : undefined;
+  const comparison = useMemo(() => candidate ? compareCandidate(loadout, selected, candidate, { beforeFilledSockets: beforeFilled, afterFilledSockets: afterFilled }) : null, [candidate, loadout, selected, beforeFilled, afterFilled]);
   const totals = useMemo(() => loadoutTotals(loadout), [loadout]);
   const warnings = useMemo(() => loadoutWarnings(loadout), [loadout]);
   const selectedDetails = useMemo(() => selectedItem ? equipmentMetricDetails(selectedItem) : null, [selectedItem]);
   const equippedCount = Object.keys(loadout.slots).length;
 
   function save(next: LoadoutState) {
-    setLoadout(next);
-    try { localStorage.setItem(LOADOUT_STORAGE_KEY, serializeLoadout(next)); setStorageError(''); }
-    catch { setStorageError('浏览器未能保存此方案；关闭页面前请导出 JSON。'); }
+    if (saved.error) { setStorageError('原装备方案无法读取，已阻止覆盖。请先恢复有效备份。'); return false; }
+    const error = writeSavedLoadout(next, saved.raw); setStorageError(error); return !error;
   }
   function selectSlot(slot: LoadoutSlot) {
-    setSelected(slot); setImportText(''); setCandidateText(''); setError(''); setNotice('');
+    const keepCandidate = candidate && chooseComparisonSlot(loadout, candidate, slot) === slot;
+    setSelected(slot); setImportText(''); if (!keepCandidate) setCandidateText(''); setError('');
+    setNotice(keepCandidate ? `候选已保留，正在与${slotLabel(slot)}比较。` : '');
   }
   function importToSlot(raw: string, fromCandidate = false) {
     const result = equipRaw(loadout, selected, raw);
     if (!result.ok) { setError(result.error); setNotice(''); return; }
-    save(result.state); setError(''); setNotice(`已将「${result.item.name}」放入${slotLabel(selected)}。`);
+    if (!save(result.state)) return;
+    setError(''); setNotice(`已将「${equipmentDisplayName(result.item)}」放入${slotLabel(selected)}。`);
     if (fromCandidate) setCandidateText(''); else setImportText('');
   }
   function setPriority(key: MetricKey, checked: boolean) {
@@ -86,7 +95,8 @@ export default function LoadoutPanel({ onPrice, onCraft, league }: LoadoutPanelP
   function importBackup() {
     const result = deserializeLoadout(backupText);
     if (!result.state) { setError(result.error); setNotice(''); return; }
-    save(result.state); setError(''); setCandidateText(''); setImportText('');
+    if (writeSavedLoadout(result.state, saved.raw)) { setError('方案未能保存，请检查浏览器存储。'); return; }
+    setError(''); setCandidateText(''); setImportText('');
     setNotice('已载入全身装备方案。工艺台装备不受影响。');
   }
   function renderSlot(slot: typeof LOADOUT_SLOTS[number]) {
@@ -95,7 +105,7 @@ export default function LoadoutPanel({ onPrice, onCraft, league }: LoadoutPanelP
       aria-pressed={selected === slot.id} aria-label={`${slot.label}：${item?.name ?? '未装备'}`} onClick={() => selectSlot(slot.id)}>
       <span className="lo-slot-label">{slot.label}</span>
       <span className="lo-slot-art"><EquipmentArt item={item} kind={slot.kind} /></span>
-      <strong>{item?.name ?? '点击导入'}</strong>
+      <strong title={item?.name}>{item ? equipmentDisplayName(item) : '点击导入'}</strong>
       {item && <small>{!item.identified ? '未鉴定' : localizeEquipmentName(item.baseName)}</small>}
     </button>;
   }
@@ -105,8 +115,24 @@ export default function LoadoutPanel({ onPrice, onCraft, league }: LoadoutPanelP
       <div><span className="wb-eyebrow">CHARACTER EQUIPMENT</span><h2>我的全身装备</h2><p>按游戏栏位保存整套装备，选一件估价，再把候选放在旁边比较。</p></div>
       <div className="lo-save-status"><span>{league ?? '当前联盟'} · {equippedCount} 件</span><small>独立保存在此浏览器</small></div>
     </div>
-    {(storageError || error) && <p className="lo-alert" role="alert">{error || storageError}</p>}
+    {(storageError || error || saved.error) && <p className="lo-alert" role="alert">{error || storageError || saved.error}</p>}
     {notice && <p className="lo-notice" role="status">{notice}</p>}
+    <details className="lo-import-entry lo-import-fold" open={equippedCount === 0}><summary><Icon name="paste" />整套导入 / 同步 · PoB2 与本机 BD</summary><section aria-label="整套装备导入">
+      <div><span className="wb-eyebrow">WHOLE LOADOUT IMPORT</span><h3>整套导入游戏装备</h3>
+        <p>先在 PoB2 更新并保存游戏角色，再在这里读取整套装备；也支持分享代码或 XML。</p></div>
+      <PobImportPanel current={loadout} onImport={(slots, source) => {
+        if (!save(applyPobLoadout(loadout, slots, source))) return;
+        setError(''); setCandidateText(''); setImportText('');
+        setNotice('已导入所选 PoB2 装备组，原角色面板基准已清除。请核对预览中的未解析效果。');
+      }} />
+      <LocalGameDataPanel characterLevel={loadout.source?.level} onBuild={(profile) => {
+        if (save({ ...loadout, goals: { ...loadout.goals, build: profile, priorities: profile.metrics } })) setNotice(`已采用「${profile.main.label}」的 BD 配装方向，可选择栏位查看建议或寻找升级。`);
+      }} />
+      <details className="lo-import-availability"><summary>能直接连接官方账号同步吗？</summary>
+        <p>本工坊目前未接入官方账号授权。GGG 官方角色接口支持 PoE2 装备读取，但截至 2026-10-22，官网暂停受理新应用注册，尚不能为本项目开通新的账号直连。当前可用方式为 PoB2 代码或 XML 导入；导入的是导出时的快照，不会随游戏自动同步。</p>
+        <a href="https://www.pathofexile.com/developer/docs#getting-started" target="_blank" rel="noreferrer">查看 GGG 官方注册说明 ↗</a>
+      </details>
+    </section></details>
     <div className="lo-layout">
       <div className="lo-inventory-column">
         <div className="lo-character" aria-label="装备栏位">
@@ -117,12 +143,13 @@ export default function LoadoutPanel({ onPrice, onCraft, league }: LoadoutPanelP
         <div className="lo-consumables" aria-label="药剂与护符栏位">{LOADOUT_SLOTS.filter((slot) => slot.id.startsWith('flask') || slot.id.startsWith('charm')).map(renderSlot)}</div>
         <p className="lo-footnote">药剂与护符为记录栏，效果不加入常驻属性。可用护符栏位、唯一装备限制、属性需求和特殊天赋请在游戏内核对。</p>
         {warnings.length > 0 && <ul className="lo-warnings">{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
-        <div className="lo-summary">
-          <h3>装备贡献合计（非角色面板）</h3>
+        <LoadoutSourcePanel state={loadout} />
+        <LoadoutQuoteSummary state={loadout} league={league ?? 'Forbidden Rites'} />
+        <details className="lo-summary"><summary>装备贡献合计（非角色面板）</summary>
           <p className="lo-footnote">下列生命、护盾、护甲等属于装备贡献；角色最终面板请在下方录入，不能直接按同一数值比较。</p>
           <div className="lo-total-grid">{METRICS.filter((metric) => !metric.key.endsWith('Dps') && ((totals[metric.key] ?? 0) !== 0 || RESISTANCE_KEYS.some((key) => key === metric.key) || metric.key === 'life')).map((metric) => <div key={metric.key}><span>{metric.label}</span><strong>{format(totals[metric.key] ?? 0)}{metric.unit}</strong></div>)}</div>
           <p className="lo-footnote">只合计可直接读取的数值，不含天赋、技能、剧情抗性惩罚、条件效果和百分比生命/防御缩放；这不是角色面板。武器 DPS 分件比较。</p>
-        </div>
+        </details>
         <CharacterPanelCalibration key={loadout.character?.recordedAt ?? 'unrecorded'} state={loadout} totals={totals} onSave={(character) => {
           save({ ...loadout, character }); setNotice(character ? '游戏面板已记录。换装时比较有效抗性，生命与防御仍只列出装备差值。' : '已清除游戏面板基准。');
         }} />
@@ -139,10 +166,6 @@ export default function LoadoutPanel({ onPrice, onCraft, league }: LoadoutPanelP
           }} /></label>)}</div>
           <p className="lo-footnote">已校准时按角色未封顶总抗性判断；未校准时仅按装备合计判断，需自行考虑剧情惩罚、天赋及抗性余量。</p>
         </details>
-        <PobImportPanel onImport={(slots) => {
-          save({ ...loadout, slots, character: undefined }); setError(''); setCandidateText(''); setImportText('');
-          setNotice('已导入所选 PoB2 装备组，原角色面板基准已清除。请核对预览中的未解析效果。');
-        }} />
         <details className="lo-backup">
           <summary>导入 / 导出整套方案</summary>
           <p className="lo-footnote">方案只包含本页装备与目标。导入会替换本页整套记录，不会覆盖工艺台。</p>
@@ -154,39 +177,48 @@ export default function LoadoutPanel({ onPrice, onCraft, league }: LoadoutPanelP
         <section className="lo-detail-panel" aria-label={`${slotLabel(selected)}装备详情`}>
           <div className="lo-detail-heading"><h3>{slotLabel(selected)}</h3><select aria-label="选择装备栏位" value={selected} onChange={(event) => { if (isLoadoutSlot(event.target.value)) selectSlot(event.target.value); }}>{LOADOUT_SLOTS.map((slot) => <option key={slot.id} value={slot.id}>{slot.label}</option>)}</select></div>
           {selectedItem ? <>
-            <div className={`lo-item-title ${selectedItem.rarity}`}><strong>{selectedItem.name}</strong><span>{localizeEquipmentName(selectedItem.baseName)}{selectedItem.itemLevel ? ` · 物品等级 ${selectedItem.itemLevel}` : ''}</span>{!selectedItem.identified && <b>未鉴定 · 词缀未知</b>}</div>
+            <div className={`lo-item-title ${selectedItem.rarity}`}><strong title={selectedItem.name}>{equipmentDisplayName(selectedItem)}</strong><span>{localizeEquipmentName(selectedItem.baseName)}{selectedItem.itemLevel ? ` · 物品等级 ${selectedItem.itemLevel}` : ''}</span>{equipmentDisplayName(selectedItem) !== selectedItem.name && <small>原名：{selectedItem.name}</small>}{!selectedItem.identified && <b>未鉴定 · 词缀未知</b>}</div>
             <div className="lo-item-properties">{selectedItem.properties.map((property, index) => <p key={`${property.name}-${index}`}>{localizeEquipmentProperty(property.text)}</p>)}</div>
+            {!!selectedItem.stateText?.length && <p className="lo-footnote">{selectedItem.stateText.join(' · ')}</p>}
             <ul className="lo-item-mods">{selectedItem.mods.map((mod, index) => <li key={`${mod.key}-${index}`}>{mod.label || mod.text || mod.raw}</li>)}</ul>
             {selectedItem.warnings.length > 0 && <ul className="lo-warnings">{selectedItem.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
-            {selectedDetails && selectedDetails.uncounted.length > 0 && <details className="lo-uncounted"><summary>{selectedDetails.uncounted.length} 条词缀未计入简化加总</summary><ul>{selectedDetails.uncounted.map((line, index) => <li key={index}>{line}</li>)}</ul></details>}
-            <div className="lo-actions"><button className="wb-button primary" type="button" onClick={() => onPrice(selectedItem.raw, 'price')}>估价这件装备</button><button className="wb-button" type="button" onClick={() => onPrice(selectedItem.raw, 'upgrade')}>寻找这件的升级</button></div>
-            <p className="lo-footnote">找升级会打开此装备的官方交易查询；将市场候选复制到下面，与当前栏位比较。价格高低不代表战力提升。</p>
-            <div className="lo-item-tools">{onCraft && selectedItem.rarity !== 'unique' && (selectedItem.slot === 'ring' || selectedItem.slot === 'amulet') && <button type="button" className="wb-text-button" onClick={() => onCraft(selectedItem.raw)}>送入工艺台</button>}<button type="button" className="wb-text-button muted" onClick={() => { save(removeSlot(loadout, selected)); setNotice(`已清空${slotLabel(selected)}。`); setError(''); }}>移除此栏装备</button><details><summary>原始物品文字</summary><pre>{selectedItem.raw}</pre></details></div>
+            {selectedDetails && selectedDetails.uncounted.length > 0 && <details className="lo-uncounted"><summary>{selectedDetails.uncounted.length} 条词缀未计入简化加总</summary><ul>{selectedDetails.uncounted.map((line, index) => <li key={index}>{localizeEquipmentStat(line)}</li>)}</ul></details>}
+            <div className="lo-actions"><button className="wb-button primary" type="button" onClick={() => onPrice(selectedItem.raw, 'price', selected)}><Icon name="search" size={17} />估价这件装备</button><button className="wb-button" type="button" onClick={() => onPrice(selectedItem.raw, 'upgrade', selected)}><Icon name="arrow" size={17} />寻找这件的升级</button></div>
+            <p className="lo-footnote">找升级沿用本栏装备和角色优先属性；候选可直接送回此栏比较。价格高低不代表战力提升。</p>
+            <div className="lo-item-tools">{onCraft && selectedItem.rarity !== 'unique' && (selectedItem.slot === 'ring' || selectedItem.slot === 'amulet') && <button type="button" className="wb-text-button" disabled={selectedItem.sanctified || selectedItem.raw.includes('[PoB数值待游戏文本核对]')} title={selectedItem.sanctified ? '这件装备已圣化，当前制作规划器不支持继续修改。' : selectedItem.raw.includes('[PoB数值待游戏文本核对]') ? '请先用游戏复制文字核对 PoB 品质与范围词缀，再送入制作策略。' : '从本栏当前装备开始规划制作'} onClick={() => onCraft(selectedItem.raw)}>送入工艺台</button>}<button type="button" className="wb-text-button muted" onClick={() => { if (save(removeSlot(loadout, selected))) { setNotice(`已清空${slotLabel(selected)}。`); setError(''); } }}>移除此栏装备</button><details><summary>原始物品文字</summary><pre>{selectedItem.raw}</pre></details></div>
           </> : <p className="lo-empty">这个栏位尚未放入装备。先选好栏位，再粘贴一件完整物品；两枚戒指和两瓶药剂分别记录。</p>}
-          <label className="lo-input-label" htmlFor="lo-equipment-import">{selectedItem ? '替换此栏装备' : '导入此栏装备'}</label>
+          <details className="wb-fold" open={!selectedItem}><summary><Icon name="paste" size={16} />{selectedItem ? '替换此栏装备' : '导入此栏装备'}</summary><label className="lo-input-label" htmlFor="lo-equipment-import">{selectedItem ? '替换此栏装备' : '导入此栏装备'}</label>
           <textarea id="lo-equipment-import" value={importText} onChange={(event) => setImportText(event.target.value)} rows={5} spellCheck={false} placeholder="在游戏内复制物品，粘贴完整文字（支持中 / 英文）" />
-          <button type="button" className="wb-button" disabled={!importText.trim()} onClick={() => importToSlot(importText)}>放入{slotLabel(selected)}</button>
+          <button type="button" className="wb-button" disabled={!importText.trim()} onClick={() => importToSlot(importText)}>放入{slotLabel(selected)}</button></details>
         </section>
-        <section className="lo-detail-panel lo-comparison" aria-label="比较替换装备">
+        <BuildAdvicePanel state={loadout} selected={selected} onSearch={() => { if (selectedItem) onPrice(selectedItem.raw, 'upgrade', selected); }} onClear={() => {
+          const goals = { ...loadout.goals }; delete goals.build;
+          if (save({ ...loadout, goals })) setNotice('已清除 BD 方向，保留当前优先属性和抗性目标。');
+        }} />
+        <details className="lo-detail-panel lo-comparison" open={Boolean(candidateText)}><summary><Icon name="equipment" size={17} />比较候选装备 · 替换{slotLabel(selected)}</summary><section aria-label="比较替换装备">
           <div className="lo-detail-heading"><div><span className="wb-eyebrow">COMPARE REPLACEMENT</span><h3>这件候选，值得换吗？</h3></div><span className="lo-target-slot">替换{slotLabel(selected)}</span></div>
           <label className="lo-input-label" htmlFor="lo-candidate-import">粘贴候选装备</label>
           <textarea id="lo-candidate-import" value={candidateText} onChange={(event) => setCandidateText(event.target.value)} rows={5} spellCheck={false} placeholder="从游戏或交易页面复制同栏位的候选物品" />
           {candidateText.trim() && !candidate && <p className="lo-alert" role="alert">尚未读到完整候选装备，请检查类别、稀有度和物品名称。</p>}
+          {candidate && <SocketComparisonControls before={selectedItem} after={candidate} beforeFilled={beforeFilled} afterFilled={afterFilled}
+            onBefore={(filled) => setSocketCounts((old) => ({ ...old, before: selectedItem && filled !== undefined ? { raw: selectedItem.raw, filled } : undefined }))}
+            onAfter={(filled) => setSocketCounts((old) => ({ ...old, after: filled !== undefined ? { raw: candidate.raw, filled } : undefined }))}
+            onFull={() => setSocketCounts({ before: selectedItem?.sockets ? { raw: selectedItem.raw, filled: selectedItem.sockets.count } : undefined, after: candidate.sockets ? { raw: candidate.raw, filled: candidate.sockets.count } : undefined })} />}
           {candidate && comparison && <>
             <div className={`lo-verdict ${comparison.status}`}><strong>{comparison.title}</strong><span>{comparison.priorityDirection}</span><p>{comparison.reason}</p></div>
-            <div className="lo-comparison-names"><span>当前：{selectedItem?.name ?? '空栏位'}</span><span>候选：{candidate.name}</span></div>
+            <div className="lo-comparison-names"><span title={selectedItem?.name}>当前：{selectedItem ? equipmentDisplayName(selectedItem) : '空栏位'}</span><span title={candidate.name}>候选：{equipmentDisplayName(candidate)}</span></div>
             {comparison.warnings.length > 0 && <ul className="lo-warnings">{comparison.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
-            <div className="lo-table-scroll"><table className="lo-deltas"><thead><tr><th>纸面属性</th><th>当前</th><th>候选</th><th>变化</th></tr></thead><tbody>{comparison.metrics.map((metric) => <tr key={metric.key}><th>{metric.label}{metric.priority && <small title="玩家优先属性">优先</small>}</th><td>{format(metric.before)}{metric.unit}</td><td>{format(metric.after)}{metric.unit}</td><td className={metric.delta > 0 ? 'positive' : metric.delta < 0 ? 'negative' : ''}>{deltaText(metric.delta, metric.unit)}</td></tr>)}</tbody></table></div>
+            <div className="lo-table-scroll"><table className="lo-deltas"><thead><tr><th>纸面属性</th><th>当前</th><th>候选</th><th>变化</th></tr></thead><tbody>{comparison.metrics.map((metric) => <tr key={metric.key}><th>{metric.label}{metric.priority && <small title="玩家优先属性">优先</small>}</th><td>{metric.beforeUnknown ? '待确认镶嵌' : `${format(metric.before)}${metric.unit}`}</td><td>{metric.afterUnknown ? '待确认镶嵌' : `${format(metric.after)}${metric.unit}`}</td><td className={!metric.beforeUnknown && !metric.afterUnknown && metric.delta > 0 ? 'positive' : !metric.beforeUnknown && !metric.afterUnknown && metric.delta < 0 ? 'negative' : ''}>{metric.beforeUnknown || metric.afterUnknown ? '—' : deltaText(metric.delta, metric.unit)}</td></tr>)}</tbody></table></div>
             {comparison.characterResistances.length > 0 && <div className="lo-target-results"><h4>角色有效抗性与溢出（局部估算）</h4>{comparison.characterResistances.map((resistance) => <p key={resistance.key}>
               {METRICS.find((metric) => metric.key === resistance.key)!.label}：有效 {format(resistance.effectiveBefore)}% → {format(resistance.effectiveAfter)}%；总值 {format(resistance.before)}% → {format(resistance.after)}%；溢出 {format(resistance.overflowBefore)}% → {format(resistance.overflowAfter)}%
             </p>)}</div>}
             {comparison.targets.length > 0 && <div className="lo-target-results"><h4>替换后的全套抗性目标</h4>{comparison.targets.map((target) => <p key={target.key} className={target.met ? 'positive' : 'negative'}>{target.label} {format(target.before)} → {format(target.after)}% / 目标 {target.minimum}% · {target.met ? '达标' : '未达标'}</p>)}</div>}
-            {(comparison.uncountedBefore.length > 0 || comparison.uncountedAfter.length > 0) && <details className="lo-uncounted"><summary>无法加总的效果 · 请逐条核对</summary><div className="lo-effects-columns"><div><h4>当前装备</h4><ul>{comparison.uncountedBefore.length ? comparison.uncountedBefore.map((line, index) => <li key={index}>{line}</li>) : <li>无额外已读取词缀</li>}</ul></div><div><h4>候选装备</h4><ul>{comparison.uncountedAfter.length ? comparison.uncountedAfter.map((line, index) => <li key={index}>{line}</li>) : <li>无额外已读取词缀</li>}</ul></div></div></details>}
+            {(comparison.uncountedBefore.length > 0 || comparison.uncountedAfter.length > 0) && <details className="lo-uncounted"><summary>无法加总的效果 · 请逐条核对</summary><div className="lo-effects-columns"><div><h4>当前装备</h4><ul>{comparison.uncountedBefore.length ? comparison.uncountedBefore.map((line, index) => <li key={index}>{localizeEquipmentStat(line)}</li>) : <li>无额外已读取词缀</li>}</ul></div><div><h4>候选装备</h4><ul>{comparison.uncountedAfter.length ? comparison.uncountedAfter.map((line, index) => <li key={index}>{localizeEquipmentStat(line)}</li>) : <li>无额外已读取词缀</li>}</ul></div></div></details>}
             <p className="lo-footnote">武器 DPS 来自物品已显示的伤害范围 × 每秒攻击次数，不是技能或流派 DPS。百分比词缀、条件效果和未识别内容不作为零收益。估值不会参与升级判定。</p>
-            <div className="lo-actions"><button type="button" className="wb-button primary" disabled={!comparison.canEquip} onClick={() => importToSlot(candidateText, true)}>采用候选并替换{slotLabel(selected)}</button><button type="button" className="wb-button" onClick={() => onPrice(candidate.raw, 'price')}>估价候选</button></div>
+            <div className="lo-actions"><button type="button" className="wb-button primary" disabled={!comparison.canEquip || comparison.sameItemText} onClick={() => importToSlot(candidateText, true)}>{comparison.sameItemText ? '无需替换：相同装备文本' : `采用候选并替换${slotLabel(selected)}`}</button><button type="button" className="wb-button" onClick={() => onPrice(candidate.raw, 'price')}>估价候选</button></div>
           </>}
           {!candidateText && <p className="lo-footnote">对比会同时保留当前装备，只有点击「采用候选」才替换本栏记录。</p>}
-        </section>
+        </section></details>
       </div>
     </div>
   </section>;

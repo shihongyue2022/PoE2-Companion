@@ -1,3 +1,4 @@
+import type { TradeCandidate } from './tradeTracking';
 export const FINANCE_KEY = 'poe2-workbench-finance-v1';
 export const CURRENCIES = {
   exalted: '崇高石', divine: '神圣石', chaos: '混沌石', alchemy: '点金石', annul: '剥离石', regal: '富豪石', transmute: '蜕变石', augment: '增幅石',
@@ -12,13 +13,16 @@ export interface PlaySession { id: string; league: string; startedAt: string; en
 export interface LedgerEntry {
   id: string; sessionId: string; at: string; kind: EntryKind; label: string;
   amount: number; currency: Currency; confirmed: boolean;
+  trade?: { sourceId: string; player: string; quantity: number };
 }
-export interface Asset { id: string; league: string; label: string; quantity: number; price: number | null; currency: Currency }
+export interface Asset { id: string; league: string; label: string; quantity: number; price: number | null; currency: Currency;
+  source?: { kind: 'loadout'; itemKey: string } }
 export interface Valuation {
   id: string; league: string; at: string; label: string; currency: Currency;
   assets: { id: string; label: string; quantity: number; price: number | null }[];
 }
-export interface FinanceState { version: 1; sessions: PlaySession[]; entries: LedgerEntry[]; assets: Asset[]; valuations: Valuation[] }
+export interface FinanceState { version: 1; sessions: PlaySession[]; entries: LedgerEntry[]; assets: Asset[]; valuations: Valuation[];
+  tradeInbox?: TradeCandidate[]; ignoredTradeIds?: string[]; tradeEnabled?: boolean }
 export const emptyFinance = (): FinanceState => ({ version: 1, sessions: [], entries: [], assets: [], valuations: [] });
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1e12;
 export const isCurrency = (value: unknown): value is Currency => typeof value === 'string' && Object.prototype.hasOwnProperty.call(CURRENCIES, value);
@@ -44,16 +48,82 @@ export function readFinance(input: string): FinanceState {
       || !sessions.some((session) => session.id === row.sessionId) || !finite(row.amount) || row.amount === 0
       || !isCurrency(row.currency) || typeof row.confirmed !== 'boolean' || typeof row.kind !== 'string'
       || !Object.prototype.hasOwnProperty.call(ENTRY_LABELS, row.kind)) throw new Error('收支记录不正确，或所属场次不存在。');
+    if (row.trade !== undefined && (!object(row.trade) || !string(row.trade.sourceId) || typeof row.trade.player !== 'string' || row.trade.player.length > 150
+      || !Number.isSafeInteger(row.trade.quantity) || (row.trade.quantity as number) < 1 || (row.trade.quantity as number) > 1e9)) throw new Error('交易来源不正确。');
     const session = sessions.find((session) => session.id === row.sessionId)!;
     if (Date.parse(row.at) < Date.parse(session.startedAt) || session.endedAt && Date.parse(row.at) > Date.parse(session.endedAt)) throw new Error('收支记录时间超出所属场次。');
   }
-  for (const row of value.assets) if (!object(row) || !string(row.league) || !isCurrency(row.currency) || !mark(row)) throw new Error('资产记录不正确。');
+  for (const row of value.assets) if (!object(row) || !string(row.league) || !isCurrency(row.currency)
+    || row.source !== undefined && (!object(row.source) || row.source.kind !== 'loadout' || typeof row.source.itemKey !== 'string' || !/^[a-f0-9]{64}$/.test(row.source.itemKey))
+    || !mark(row)) throw new Error('资产记录不正确。');
   for (const row of value.valuations) if (!object(row) || !string(row.id) || !string(row.league) || !string(row.label)
     || !date(row.at) || !isCurrency(row.currency) || !Array.isArray(row.assets) || row.assets.length > 500
     || !row.assets.every(mark) || !uniqueIds(row.assets)) throw new Error('估值快照不正确。');
   const state = value as unknown as FinanceState;
+  if (state.tradeEnabled !== undefined && typeof state.tradeEnabled !== 'boolean') throw new Error('追踪设置不正确。');
+  if (state.ignoredTradeIds !== undefined && (!Array.isArray(state.ignoredTradeIds) || state.ignoredTradeIds.length > 20000 || !state.ignoredTradeIds.every(string))) throw new Error('忽略记录不正确。');
+  if (state.tradeInbox !== undefined && (!Array.isArray(state.tradeInbox) || state.tradeInbox.length > 500 || !state.tradeInbox.every(validTradeCandidate) || !uniqueIds(state.tradeInbox))) throw new Error('待确认交易不正确。');
   if (![state.sessions, state.entries, state.assets, state.valuations].every(uniqueIds)) throw new Error('记录 ID 重复，已拒绝导入以避免重复记账。');
+  const tradeIds = state.entries.flatMap((entry) => entry.trade ? [entry.trade.sourceId] : []);
+  if (new Set(tradeIds).size !== tradeIds.length) throw new Error('同一交易重复记账。');
   return state;
+}
+export function validTradeCandidate(value: unknown): value is TradeCandidate {
+  return object(value) && string(value.id) && date(value.at) && string(value.item) && typeof value.player === 'string' && value.player.length <= 150
+    && Number.isSafeInteger(value.quantity) && (value.quantity as number) >= 1 && (value.quantity as number) <= 1e9
+    && (value.amount === null || finite(value.amount) && value.amount > 0) && (value.currency === null || isCurrency(value.currency))
+    && typeof value.currencyText === 'string' && value.currencyText.length <= 100 && (value.kind === null || value.kind === 'sale' || value.kind === 'purchase')
+    && ['log', 'paste', 'import'].includes(value.source as string) && (value.league === undefined || string(value.league))
+    && (value.acceptedAt === undefined || date(value.acceptedAt) && Date.parse(value.acceptedAt) >= Date.parse(value.at));
+}
+export function collectTrades(state: FinanceState, events: readonly TradeCandidate[]): FinanceState {
+  const seen = new Set([...(state.ignoredTradeIds ?? []), ...(state.tradeInbox ?? []).map((row) => row.id), ...state.entries.flatMap((row) => row.trade ? [row.trade.sourceId] : [])]);
+  const added = events.filter((row) => { if (!validTradeCandidate(row) || seen.has(row.id)) return false; seen.add(row.id); return true; });
+  if (!added.length) return state;
+  // Keep unprocessed records instead of silently evicting them when the inbox is full.
+  const space = Math.max(0, 500 - (state.tradeInbox?.length ?? 0));
+  return space ? { ...state, tradeInbox: [...state.tradeInbox ?? [], ...added.slice(0, space)] } : state;
+}
+export function confirmTrade(state: FinanceState, candidate: TradeCandidate, league: string,
+  actual: { amount: number; currency: Currency; kind: 'sale' | 'purchase' }): FinanceState {
+  if (!validTradeCandidate(candidate) || !finite(actual.amount) || actual.amount <= 0 || !isCurrency(actual.currency)
+    || !['sale', 'purchase'].includes(actual.kind)) throw new Error('请核对成交方向、正数金额和通货。');
+  if (!state.tradeInbox?.some((row) => row.id === candidate.id) || state.entries.some((row) => row.trade?.sourceId === candidate.id)) throw new Error('此交易已处理，请刷新列表。');
+  if (candidate.league && candidate.league !== league) throw new Error('请切换到该交易所属联盟后确认。');
+  const at = candidate.acceptedAt ?? candidate.at;
+  let session = state.sessions.find((row) => row.league === league && Date.parse(row.startedAt) <= Date.parse(at) && (!row.endedAt || Date.parse(row.endedAt) >= Date.parse(at)));
+  const sessions = [...state.sessions];
+  if (!session) { session = { id: crypto.randomUUID(), league, startedAt: at, endedAt: at }; sessions.push(session); }
+  return { ...state, sessions, tradeInbox: state.tradeInbox.filter((row) => row.id !== candidate.id), entries: [...state.entries, {
+    id: crypto.randomUUID(), sessionId: session.id, at, kind: actual.kind, label: candidate.item, amount: actual.amount,
+    currency: actual.currency, confirmed: true, trade: { sourceId: candidate.id, player: candidate.player, quantity: candidate.quantity },
+  }] };
+}
+export function trackerReport(state: FinanceState, league: string, currency: Currency, days: number, search = '', now = Date.now()) {
+  const ids = new Set(state.sessions.filter((row) => row.league === league).map((row) => row.id));
+  const start = days === 1 ? new Date(new Date(now).setHours(0, 0, 0, 0)).getTime() : days ? now - days * 86400_000 : 0;
+  const rows = state.entries.filter((row) => row.confirmed && ids.has(row.sessionId) && row.currency === currency && Date.parse(row.at) >= start
+    && Date.parse(row.at) <= now && `${row.label} ${row.trade?.player ?? ''}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const income = rows.filter((row) => row.kind === 'sale' || row.kind === 'income').reduce((sum, row) => sum + row.amount, 0);
+  const expense = rows.filter((row) => row.kind === 'purchase' || row.kind === 'craft').reduce((sum, row) => sum + row.amount, 0);
+  const groups = new Map<string, LedgerEntry[]>();
+  for (const row of rows) { const key = new Date(row.at).toLocaleDateString('zh-CN'); groups.set(key, [...groups.get(key) ?? [], row]); }
+  return { rows, income, expense, net: income - expense, groups: [...groups.entries()] };
+}
+export function addLoadoutAssets(state: FinanceState, league: string, inputs: readonly { itemKey: string; label: string; quantity: number; price: number | null; currency: Currency }[], refreshPrices = false) {
+  const existing = new Set(state.assets.filter((asset) => asset.league === league && asset.source?.kind === 'loadout').map((asset) => asset.source!.itemKey));
+  const added = inputs.filter((input) => !existing.has(input.itemKey)).map((input): Asset => ({
+    id: crypto.randomUUID(), league, label: input.label, quantity: input.quantity, price: input.price, currency: input.currency,
+    source: { kind: 'loadout', itemKey: input.itemKey },
+  }));
+  let updated = 0;
+  const assets = state.assets.map((asset) => {
+    const input = refreshPrices && asset.league === league && asset.source?.kind === 'loadout' ? inputs.find((row) => row.itemKey === asset.source!.itemKey) : undefined;
+    if (!input || input.price === null) return asset;
+    updated++;
+    return { ...asset, price: input.price, currency: input.currency };
+  });
+  return { state: { ...state, assets: [...assets, ...added] }, added: added.length, updated, skipped: inputs.length - added.length };
 }
 export function sessionReport(state: FinanceState, sessionId: string) {
   const currencies: Partial<Record<Currency, { income: number; purchase: number; craft: number; net: number }>> = {};

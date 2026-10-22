@@ -18,6 +18,7 @@ page.on('pageerror', (error) => errors.push(error.message));
 await mkdir('artifacts/workbench', { recursive: true });
 try {
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
+  await page.getByRole('navigation', { name: '工作区域' }).getByRole('button', { name: '制作策略' }).click();
   await page.locator('.wb-pool-row').first().waitFor();
   await page.getByRole('button', { name: '粘贴游戏物品' }).click();
   await page.getByLabel('游戏物品文本').fill(raw);
@@ -32,7 +33,9 @@ try {
   check('pasted ring immediately diagnoses ilvl79 cold ceilingT2 and links to ilvl82+ replacement bases');
 
   await page.getByLabel('搜索精度').selectOption('15000');
+  await page.getByText('通货范围与计算选项', { exact: true }).click();
   await page.getByRole('checkbox', { name: /同时抽样验证/ }).check();
+  await advisor.locator(':scope > details.wb-fold > summary').click();
   await page.getByLabel('追加材料预算').fill('0');
   const repair = advisor.locator('[data-candidate-id="repair"]');
   await repair.getByRole('button', { name: '单独评估此方案' }).click();
@@ -75,6 +78,7 @@ try {
   assert.equal(await page.locator('.wb-current-mods .wb-mod').count(), 5);
   await checkpoint.screenshot({ path: 'artifacts/workbench/checkpoint-met.png' });
   await page.reload({ waitUntil: 'networkidle' });
+  await page.getByRole('navigation', { name: '工作区域' }).getByRole('button', { name: '制作策略' }).click();
   await page.getByRole('region', { name: '制作步骤校验' }).locator('[data-status="met"]').waitFor();
   check('annul checkpoint verifies the intended removal, updates gear, and persists the frozen objective and result');
 

@@ -130,3 +130,6 @@ RELEASE_NOTES.md
 
 # Local workbench browser verification artifacts
 /artifacts/
+
+# Optional local companion applications, downloads and personal character builds
+/.local-tools/

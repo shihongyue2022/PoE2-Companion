@@ -30,7 +30,7 @@ import globals from 'globals';
 export default tseslint.config(
   {
     // Generated, vendored, or not ours. `target/` is the retired Java build output still on disk.
-    ignores: ['dist/**', 'node_modules/**', 'target/**', 'coverage/**', 'data/**', 'public/**', 'artifacts/**', 'logs/**'],
+    ignores: ['dist/**', 'node_modules/**', 'target/**', 'coverage/**', 'data/**', 'public/**', 'artifacts/**', 'logs/**', '.local-tools/**'],
   },
 
   js.configs.recommended,
@@ -52,6 +52,10 @@ export default tseslint.config(
             'vitest.config.ts', 'vite.config.ts',
             // The local Vite HTTP bridge runs in Node and belongs to no application tsconfig.
             'tools/workbenchServer.ts', 'tools/workbenchServer.test.ts',
+            'tools/localPob.ts', 'tools/localPob.test.ts',
+            'tools/localGameData.ts', 'tools/localGameData.test.ts',
+            'tools/buildPlanner.ts', 'tools/buildPlanner.test.ts',
+            'tools/tradeLog.ts', 'tools/tradeLog.test.ts',
             // Measurement and cross-check scripts, run ad hoc with `node --experimental-strip-types`.
             // They belong to no build, so no tsconfig includes them.
             'scripts/*.mts',
@@ -168,7 +172,7 @@ export default tseslint.config(
   // after the globals below would silently replace them and every `console` would read as undefined.
   {
     files: [
-      'tools/**/*.{mjs,js}', 'tools/workbenchServer*.ts', 'scripts/**/*.{mjs,js,mts}', '*.config.{js,ts}', 'eslint.config.js',
+      'tools/**/*.{mjs,js}', 'tools/workbenchServer*.ts', 'tools/localPob*.ts', 'tools/localGameData*.ts', 'tools/buildPlanner*.ts', 'tools/tradeLog*.ts', 'scripts/**/*.{mjs,js,mts}', '*.config.{js,ts}', 'eslint.config.js',
       'e2e/**/*.mjs',
     ],
     ...tseslint.configs.disableTypeChecked,
@@ -184,7 +188,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['tools/workbenchServer*.ts'],
+    files: ['tools/workbenchServer*.ts', 'tools/localPob*.ts', 'tools/localGameData*.ts', 'tools/buildPlanner*.ts', 'tools/tradeLog*.ts'],
     extends: [...tseslint.configs.recommended],
   },
   // These Node scripts serialize page.evaluate callbacks into the browser context.

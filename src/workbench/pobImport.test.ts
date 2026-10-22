@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { deflateSync } from 'node:zlib';
 import { Blob as NodeBlob } from 'node:buffer';
 import { decodePob, parsePobXml, previewPob } from './pobImport';
-import { parseEquipment, equipmentMetrics } from './genericEquipment';
+import { parseEquipment, equipmentMetrics, equipmentDisplayName } from './genericEquipment';
 
 const ring = `Rarity: RARE
 Dawn Loop
@@ -48,6 +48,27 @@ describe('PoB2 whole equipment import', () => {
       expect(equipmentMetrics(item).life).toBeUndefined();
       expect(item.mods.some((mod) => !mod.searchable && mod.raw.includes('PoB数值待'))).toBe(true);
     }
+  });
+  it('reads fixed rolls despite saved ModRange metadata, while unresolved ranges stay excluded', () => {
+    const source = `<PathOfBuilding2><Items><Item id="1"><![CDATA[Rarity: RARE
+Imported Loop
+Amethyst Ring
+Item Level: 82
+Implicits: 1
++12% to Chaos Resistance
++157 to maximum Mana
++(70-90) to maximum Life
+Grants Skill: Spear Throw]]><ModRange id="2" range="0.5"/></Item><Slot name="Ring 1" itemId="1"/></Items></PathOfBuilding2>`;
+    const preview = previewPob(parsePobXml(source), '1', false);
+    const item = parseEquipment(preview.slots.ring1!)!;
+    expect(equipmentMetrics(item)).toMatchObject({ mana: 157, chaosResistance: 12 });
+    expect(equipmentMetrics(item).life).toBeUndefined();
+    expect(item.mods.find((mod) => mod.text.startsWith('+157'))).toMatchObject({ searchable: true, label: '157最大魔力' });
+    expect(item.mods.find((mod) => mod.raw.includes('(70-90)'))).toMatchObject({ searchable: false });
+    expect(item.mods.find((mod) => mod.text === 'Grants Skill: Spear Throw')).toMatchObject({ label: '赋予技能: 长矛投掷', searchable: false, ids: [] });
+    expect(equipmentDisplayName(item)).toBe('稀有紫晶戒指');
+    expect(item.raw).toContain('Imported Loop');
+    expect(preview.imported).toEqual(['左戒指：稀有紫晶戒指']);
   });
   it('retains corrupted state despite catalyst uncertainty and handles legacy direct Slots', () => {
     const doc = parsePobXml(`<PathOfBuilding2><Items><Item id="7"><![CDATA[${ring}\nCatalystQuality: 20\nTwice Corrupted]]></Item><Slot name="Ring 1" itemId="7" /></Items></PathOfBuilding2>`);

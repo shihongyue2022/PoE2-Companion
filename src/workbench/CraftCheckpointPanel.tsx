@@ -95,8 +95,8 @@ function CheckpointBody({
   const canRecalculate = review !== null && review.status !== 'unresolved' && review.status !== 'mismatch';
 
   return <section className="wb-panel wb-checkpoint" aria-label="制作步骤校验">
-    <div className="wb-section-head"><div><p className="wb-eyebrow">制作步骤校验</p><h2>每用一步通货，都核对结果。</h2></div>{!anchor && !configuring && <button className="wb-button" onClick={resetDraft}>设置制作锚点</button>}</div>
-    <p className="wb-fine">先锁定本步要改变和保留的词缀。在游戏中手动使用通货后，重新复制装备并粘贴校验；达标后再计算后续策略。</p>
+    <div className="wb-section-head"><div><h3>制作锚点 · {anchor ? '本步已锁定' : '用通货后核对结果'}</h3></div>{!anchor && !configuring && <button className="wb-button" onClick={resetDraft}>设置制作锚点</button>}</div>
+    {(anchor || configuring) && <p className="wb-fine">先锁定本步要改变和保留的词缀。在游戏中手动使用通货后，重新复制装备并粘贴校验；达标后再计算后续策略。</p>}
 
     {!anchor && configuring && <div className="wb-checkpoint-draft">
       <p className="wb-fine">当前快照：{translateBase(baseName)} · 物等 {item.level} · {held.length} 条词缀。锚点只核对词缀与阶层，不保证具体数值或品质。</p>

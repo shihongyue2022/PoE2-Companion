@@ -1,11 +1,13 @@
 import { emptyLoadout, equipRaw, slotLabel, type LoadoutSlot, type LoadoutState } from './loadout';
-import { parseEquipment } from './genericEquipment';
+import { equipmentDisplayName, parseEquipment } from './genericEquipment';
+import type { PobSource } from './loadoutSource';
+import { equipmentSignature } from './characterPanel';
 
 const MAX_XML = 3_000_000;
 const MAX_CODE = 1_500_000;
 export interface PobItem { id: string; raw: string; warnings: string[] }
 export interface PobSet { id: string; title: string; secondWeapons: boolean; slots: { name: string; itemId: string }[] }
-export interface PobDocument { items: Record<string, PobItem>; sets: PobSet[]; activeSet: string }
+export interface PobDocument { items: Record<string, PobItem>; sets: PobSet[]; activeSet: string; profile?: Pick<PobSource, 'className' | 'ascendancy' | 'level' | 'version' | 'reference'> }
 export interface PobPreview { slots: LoadoutState['slots']; imported: string[]; warnings: string[] }
 const slotMap: Record<string, LoadoutSlot> = {
   'Weapon 1': 'mainHand', 'Weapon 2': 'offHand', Helmet: 'helmet', 'Body Armour': 'body',
@@ -58,20 +60,20 @@ function normalizePobItem(element: Element): PobItem {
   const header = lines.slice(rarity, rarity + nameLines + 1);
   const tail = lines.slice(rarity + nameLines + 1);
   const catalyst = tail.some((line) => /^CatalystQuality:\s*[1-9]/i.test(line));
-  const legacyRanges = [...element.children].some((child) => child.tagName === 'ModRange');
   const selectedVariants = ['variant', 'variantAlt', 'variantAlt2'].map((attribute) => element.getAttribute(attribute)).filter(Boolean);
   const properties: string[] = [], mods: string[] = [];
   let implicits = 0;
   for (const original of tail) {
     if (/^Implicits:/i.test(original)) { implicits = Number(original.split(':')[1]) || 0; continue; }
-    if (/^(?:Item Level|Quality|Armour|Evasion|Energy Shield|Spirit|Physical Damage|Elemental Damage|Attacks per Second|Critical Hit Chance|Sockets):/i.test(original)) {
+    if (/^(?:Item Level|Quality|Armour|Evasion|Energy Shield|Spirit|Ward|Physical Damage|Elemental Damage|Attacks per Second|Critical Hit Chance|Sockets|Rune):/i.test(original)) {
+      if (/^Ward:/i.test(original)) warnings.push('符文保护尚未纳入装备加总。');
       properties.push(original.replace(/^Evasion:/, 'Evasion Rating:')); continue;
     }
     if (/^(?:Unique ID|League|Crafted|Prefix|Suffix|Catalyst|CatalystQuality|Variant|Selected Variant|Has Alt Variant|Has Alt Variant Two|Has Alt Variant Three|LevelReq|Radius|Limited to|Rune|Source|Upgrade|Unreleased|Runic Ward|Requires Class):/i.test(original)) {
       if (/^Runic Ward:/i.test(original)) warnings.push('符文保护尚未纳入装备加总。');
       continue;
     }
-    if (/^(?:Corrupted|Twice Corrupted|Double Corrupted|Mirrored|Unidentified)$/i.test(original)) { mods.push(original); continue; }
+    if (/^(?:Corrupted|Twice Corrupted|Double Corrupted|Mirrored|Unidentified|Sanctified)$/i.test(original)) { mods.push(original); continue; }
     const implicit = implicits-- > 0;
     if (/\{disabled\}/i.test(original)) continue;
     const variant = original.match(/\{variant:([^}]+)\}/i);
@@ -91,7 +93,9 @@ function normalizePobItem(element: Element): PobItem {
       return String(value);
     });
     if (!line) continue;
-    if (catalyst || legacyRanges || unresolved || unsupported) {
+    // PoB also writes ModRange children for fixed numeric clipboard lines. They do not
+    // make those numbers uncertain. Only an unresolved textual range needs deferral.
+    if (catalyst || unresolved || unsupported) {
       line += ' [PoB数值待游戏文本核对]';
       warnings.push('部分词缀涉及品质、旧版范围或版本计算；已保留文字，不加入数值比较及交易条件。');
     }
@@ -122,7 +126,39 @@ export function parsePobXml(xml: string): PobDocument {
       .map((child) => ({ name: child.getAttribute('name') ?? '', itemId: child.getAttribute('itemId') ?? '' })),
   }));
   if (new Set(parsed.map((set) => set.id)).size !== parsed.length) throw new Error('PoB2 装备组 ID 重复。');
-  return { items, sets: parsed, activeSet: container.getAttribute('activeItemSet') ?? parsed[0]!.id };
+  const build = [...document.documentElement.children].find((child) => child.tagName === 'Build');
+  const profile: PobDocument['profile'] = {};
+  if (build) {
+    const level = Number(build.getAttribute('level'));
+    if (Number.isInteger(level) && level > 0 && level <= 100) profile.level = level;
+    profile.className = build.getAttribute('className')?.slice(0, 300) ?? undefined;
+    profile.ascendancy = build.getAttribute('ascendClassName')?.slice(0, 300) ?? undefined;
+    profile.version = build.getAttribute('targetVersion')?.slice(0, 300) ?? undefined;
+    const stats = new Map([...build.children].filter((child) => child.tagName === 'PlayerStat').map((child) => [child.getAttribute('stat'), Number(child.getAttribute('value') ?? NaN)]));
+    const ref: NonNullable<PobSource['reference']> = { values: {}, caps: {}, effective: {} };
+    for (const [stat, metric] of [['Life', 'life'], ['Mana', 'mana'], ['EnergyShield', 'energyShield'], ['Armour', 'armour'], ['Evasion', 'evasion'], ['Spirit', 'spirit'], ['Str', 'strength'], ['Dex', 'dexterity'], ['Int', 'intelligence']] as const) {
+      const number = stats.get(stat); if (number !== undefined && Number.isFinite(number) && number >= 0 && number <= 1e12) ref.values[metric] = number;
+    }
+    // Capped/effective resistance values are NOT a substitute for the uncapped total.
+    for (const [stat, key] of [['Fire', 'fireResistance'], ['Cold', 'coldResistance'], ['Lightning', 'lightningResistance'], ['Chaos', 'chaosResistance']] as const) {
+      const total = stats.get(`${stat}ResistTotal`), cap = stats.get(`${stat}ResistMax`);
+      if (total !== undefined && Number.isFinite(total) && total >= -200 && total <= 1000) ref.values[key] = total;
+      if (cap !== undefined && Number.isFinite(cap) && cap >= 0 && cap <= 100) ref.caps[key] = cap;
+      const effective = stats.get(`${stat}Resist`);
+      if (effective !== undefined && Number.isFinite(effective) && effective >= -200 && effective <= 100) ref.effective![key] = effective;
+    }
+    const dps = stats.get('FullDPS'); if (dps !== undefined && Number.isFinite(dps) && dps >= 0 && dps <= 1e15) ref.fullDps = dps;
+    if (Object.keys(ref.values).length || Object.keys(ref.effective!).length || ref.fullDps !== undefined) profile.reference = ref;
+  }
+  return { items, sets: parsed, activeSet: container.getAttribute('activeItemSet') ?? parsed[0]!.id, profile };
+}
+
+export function pobImportSource(document: PobDocument, setId: string, secondWeapons: boolean, slots: LoadoutState['slots'], file?: { name?: string; modifiedAt?: string }, warnings: readonly string[] = []): PobSource {
+  const set = document.sets.find((entry) => entry.id === setId)!;
+  const current = set.id === document.activeSet && secondWeapons === set.secondWeapons;
+  return { kind: 'pob', importedAt: new Date().toISOString(), ...document.profile,
+    reference: current ? document.profile?.reference : undefined, fileName: file?.name, savedAt: file?.modifiedAt,
+    setId, setTitle: set.title.slice(0, 300), secondWeapons, equipmentSignature: equipmentSignature(slots), warnings: warnings.slice(0, 50).map((warning) => warning.slice(0, 500)) };
 }
 
 export function previewPob(document: PobDocument, setId: string, secondWeapons: boolean): PobPreview {
@@ -146,7 +182,7 @@ export function previewPob(document: PobDocument, setId: string, secondWeapons: 
     if (!result.ok) { warnings.push(`${slotLabel(slot)}：${result.error}`); continue; }
     state = result.state;
     const parsed = parseEquipment(item.raw)!;
-    imported.push(`${slotLabel(slot)}：${parsed.name}`);
+    imported.push(`${slotLabel(slot)}：${equipmentDisplayName(parsed)}`);
     warnings.push(...[...item.warnings, ...parsed.warnings].map((warning) => `${slotLabel(slot)}：${warning}`));
   }
   return { slots: state.slots, imported, warnings };

@@ -50,9 +50,9 @@ describe('loadout player actions', () => {
     expect(screen.getByRole('button', { name: '左戒指：Cinder Band' })).toBeVisible();
     expect(screen.getByRole('button', { name: '右戒指：Dusk Loop' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: '估价这件装备' }));
-    expect(onPrice).toHaveBeenLastCalledWith(ring('Dusk Loop', 90), 'price');
+    expect(onPrice).toHaveBeenLastCalledWith(ring('Dusk Loop', 90), 'price', 'ring2');
     await user.click(screen.getByRole('button', { name: '寻找这件的升级' }));
-    expect(onPrice).toHaveBeenLastCalledWith(ring('Dusk Loop', 90), 'upgrade');
+    expect(onPrice).toHaveBeenLastCalledWith(ring('Dusk Loop', 90), 'upgrade', 'ring2');
     expect(localStorage.getItem('poe2-workbench-v1')).toBe(craftSession);
     expect(localStorage.getItem(LOADOUT_STORAGE_KEY)).toContain('Cinder Band');
     view.unmount();

@@ -1,5 +1,6 @@
 import source from './data/equipment-index.json';
 import tradeItems from './data/trade-item-index.json';
+import displayVocabulary from './data/equipment-display.json';
 
 export type EquipmentSlot = 'weapon' | 'offhand' | 'helmet' | 'body' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'belt' | 'jewel' | 'flask' | 'charm' | 'relic' | 'other';
 export interface EquipmentProperty { name: string; label: string; values: number[]; text: string }
@@ -16,6 +17,8 @@ export interface Equipment {
   officialTypeCandidates?: { type: string; category: string }[];
   itemLevel?: number; identified: boolean; corrupted: boolean; twoHanded: boolean;
   doubleCorrupted?: boolean; flavourText?: string[]; stateText?: string[];
+  sanctified?: boolean;
+  sockets?: { count: number; filled?: number };
   properties: EquipmentProperty[]; mods: EquipmentMod[]; warnings: string[];
 }
 interface ItemEntry { en: string; zh: string; category: string; base?: string; icon?: string; group?: string; mapTier?: number }
@@ -91,6 +94,28 @@ for (const stat of index.stats) for (const matcher of stat.matchers) {
   const key = skeleton(matcher.string); const list = matchIndex.get(key) ?? [];
   list.push({ stat, matcher, pattern }); matchIndex.set(key, list);
 }
+const displayMatchers = new Map<string, { english: Matcher; chinese: Matcher; pattern: RegExp }[]>();
+for (const stat of displayVocabulary.stats) for (const english of stat.english as Matcher[]) {
+  const chinese = (stat.chinese as Matcher[]).find((local) => Boolean(local.negate) === Boolean(english.negate)
+    && (local.string.match(/#/g)?.length ?? 0) === (english.string.match(/#/g)?.length ?? 0));
+  if (!chinese) continue;
+  const key = skeleton(english.string), entries = displayMatchers.get(key) ?? [];
+  entries.push({ english, chinese, pattern: new RegExp(`^${normalize(english.string).split('#').map(escape).join('([+-]?\\d+(?:\\.\\d+)?)')}$`, 'i') });
+  displayMatchers.set(key, entries);
+}
+function displayOnlyStat(text: string): string {
+  if (/^Bonded:\s*/i.test(text)) {
+    const effect = text.replace(/^Bonded:\s*/i, '');
+    const translated = parseMod(effect, 'display-only').label;
+    if (translated !== effect) return `命定：${translated}`;
+  }
+  const labels = (displayMatchers.get(skeleton(text)) ?? []).flatMap(({ chinese, pattern }) => {
+    const match = pattern.exec(normalize(text)); if (!match) return [];
+    let position = 1;
+    return [simplifyEquipmentText(chinese.string.replace(/#/g, () => match[position++]!))];
+  });
+  return new Set(labels).size === 1 ? labels[0]! : simplifyEquipmentText(text);
+}
 function origin(text: string): string | undefined {
   if (/\((?:implicit|固定)\)|（固定）/i.test(text)) return 'implicit';
   if (/\((?:rune|符文)\)|（符文）/i.test(text)) return 'rune';
@@ -106,7 +131,10 @@ function parseMod(raw: string, key: string, originHint?: string): EquipmentMod {
     return match ? [{ ...entry, values: match.slice(1).map(Number) }] : [];
   });
   const refs = new Set(matches.map((m) => m.stat.ref));
-  if (!matches.length || refs.size > 1) return { key, raw, text, label: simplifyEquipmentText(text), ids: [], values: numbers(text), searchable: false,
+  if (!matches.length || refs.size > 1) return { key, raw, text,
+    label: text.includes('[PoB数值待游戏文本核对]')
+      ? `${parseMod(text.replace(/\s*\[PoB数值待游戏文本核对\]/g, ''), 'display-only').label} [PoB数值待游戏文本核对]`
+      : displayOnlyStat(text), ids: [], values: numbers(text), searchable: false,
     warning: matches.length ? '存在多种属性含义，未自动加入交易条件。' : '未匹配官方交易属性；保留原文，请在官网核对。' };
   const found = matches[0]!;
   const kind = origin(raw) ?? originHint;
@@ -121,7 +149,7 @@ function parseMod(raw: string, key: string, originHint?: string): EquipmentMod {
     && Boolean(matcher.negate) === Boolean(found.matcher.negate)
     && (matcher.string.match(/#/g)?.length ?? 0) === found.values.length);
   let position = 0;
-  const label = !/[\u3400-\u9fff]/u.test(text) && chinese && (found.values.length === 1 || damageRange)
+  const label = !/[\u3400-\u9fff]/u.test(text) && chinese && (found.values.length <= 1 || damageRange)
     ? simplifyEquipmentText(chinese.string.replace(/#/g, () => String(found.values[position++]))) : simplifyEquipmentText(text);
   return { key, raw, text, label, ids, values, searchable: ids.length > 0,
     ...(scalar === undefined ? {} : { value: scalar }), ref: found.stat.ref, ...(found.stat.id ? { statId: found.stat.id } : {}),
@@ -133,12 +161,22 @@ function parseMod(raw: string, key: string, originHint?: string): EquipmentMod {
 export function localizeEquipmentName(name: string): string {
   return simplifyEquipmentText(byName.get(normalize(name))?.[0]?.zh ?? name);
 }
+/** Random rare/magic names are not a bilingual identifier in PoB. Show the verified base
+ * with rarity, retaining the original name in tooltips/raw text instead of inventing a translation. */
+export function equipmentDisplayName(item: Equipment): string {
+  const name = localizeEquipmentName(item.name);
+  if (/[\u3400-\u9fff]/u.test(name)) return name;
+  const base = localizeEquipmentName(item.baseName);
+  const rarity = { normal: '普通', magic: '魔法', rare: '稀有', unique: '传奇', currency: '通货', gem: '宝石', card: '卡片' }[item.rarity];
+  return /[\u3400-\u9fff]/u.test(base) ? `${rarity}${base}` : name;
+}
 export function localizeEquipmentStat(text: string): string { return parseMod(text, 'display').label; }
 /** Match a rendered rule-snapshot line to the same official scalar as a clipboard modifier. */
 export function matchEquipmentStat(text: string): EquipmentMod { return parseMod(text, 'reference'); }
 
 const propertyNames: [string, string, string[]][] = [
-  ['armour', '护甲', ['Armour', '护甲']], ['evasion', '闪避值', ['Evasion Rating', '闪避值', '闪避']], ['energyShield', '能量护盾', ['Energy Shield', '能量护盾']],
+  ['ward', '符文保护', ['Ward', 'Runic Ward', '符文保护']],
+  ['armour', '护甲', ['Armour', '护甲', '护甲值']], ['evasion', '闪避值', ['Evasion Rating', '闪避值', '闪避']], ['energyShield', '能量护盾', ['Energy Shield', '能量护盾']],
   ['physicalDamage', '物理伤害', ['Physical Damage', '物理伤害']], ['elementalDamage', '元素伤害', ['Elemental Damage', '元素伤害']], ['chaosDamage', '混沌伤害', ['Chaos Damage', '混沌伤害']],
   ['attacksPerSecond', '每秒攻击次数', ['Attacks per Second', '每秒攻击次数', '每秒攻击速度']], ['criticalHitChance', '暴击率', ['Critical Hit Chance', '暴击几率', '暴击率']],
   ['spirit', '精魂', ['Spirit', '精魂']], ['block', '格挡率', ['Block chance', 'Chance to Block', '格挡几率', '格挡率']], ['quality', '品质', ['Quality', '品质']],
@@ -151,7 +189,7 @@ export function localizeEquipmentProperty(text: string): string {
   const property = colon > 0 ? propertiesByLabel.get(normalize(text.slice(0, colon))) : undefined;
   return property ? `${property.label}：${text.slice(colon + 1).trim()}` : simplifyEquipmentText(text);
 }
-const ignoredLine = (line: string): boolean => /^(?:Requirements|需求|需要|需求等级|Level|等级|Strength|力量|Dexterity|敏捷|Intelligence|智慧|智力|Sockets|插槽|孔|Item Level|物品等级|物品等級|Limited to|限定|Radius|半径|半徑|Unidentified|未鉴定|未鑑定|Corrupted|已腐化|已污染|Mirrored|已复制|已複製|Split|分裂|Note|备注|備註|Right click|右键|右鍵|Place into|放置|Can only|只能|Currently|目前|You cannot|你无法|你無法|Uses? |消耗|Charges|充能|Consumes|持续|持續|Recovers|回复|回復|恢复|恢復|Lasts|持续时间|持續時間|Charm Slots|护符栏位|護符欄位|Requires|需要)/i.test(line)
+const ignoredLine = (line: string): boolean => /^(?:Requirements|需求|需要|需求等级|Level|等级|Strength|力量|Dexterity|敏捷|Intelligence|智慧|智力|Rune:|Sockets|插槽|孔|Item Level|物品等级|物品等級|Limited to|限定|Radius|半径|半徑|Unidentified|未鉴定|未鑑定|Corrupted|已腐化|已污染|Mirrored|已复制|已複製|Split|分裂|Note|备注|備註|Right click|右键|右鍵|Place into|放置|Can only|只能|Currently|目前|You cannot|你无法|你無法|Uses? |消耗|Charges|充能|Consumes|持续|持續|Recovers|回复|回復|恢复|恢復|Lasts|持续时间|持續時間|Charm Slots|护符栏位|護符欄位|Requires|需要)/i.test(line)
   || /^\{|^\}|^[\d\s,]+(?:\(.*\))?$/.test(line);
 
 /** Parse any indexed tradeable equipment. No crafting tiers or crafting modifier pool are consulted. */
@@ -207,6 +245,7 @@ export function parseEquipment(raw: string): Equipment | null {
     const advanced = block.some((line) => /^\{/.test(line));
     const content = block.filter((line) => {
       if (isDoubleCorrupted(line)) { stateText.push('双重腐化'); return false; }
+      if (/^(?:Sanctified|(?:已)?圣化)$/i.test(simplifyEquipmentText(line))) { stateText.push('已圣化'); return false; }
       if (/^(?:Fractured Item|破裂之物)$/i.test(line)) { stateText.push('破裂之物'); return false; }
       return true;
     });
@@ -254,13 +293,23 @@ export function parseEquipment(raw: string): Equipment | null {
     if (affixTypes.has(i)) best.affixType = affixTypes.get(i);
     mods.push(best); i += consumed;
   }
+  // S identifies an augment socket, not its occupancy. PoB enumerates Rune: None
+  // for empty sockets; only a complete enumeration can establish the filled count.
+  const socketLine = lines.find((line) => /^(?:Sockets|插槽)[:：]/i.test(line));
+  const tokens = socketLine?.split(/[:：]/).slice(1).join(':').trim().split(/\s+/) ?? [];
+  const socketCount = tokens.length > 0 && tokens.length <= 6 && tokens.every((token) => token === 'S') ? tokens.length : undefined;
+  const runes = lines.filter((line) => /^Rune:/i.test(line)).map((line) => line.slice(line.indexOf(':') + 1).trim());
+  const filled = socketCount !== undefined && runes.length === socketCount && runes.every(Boolean)
+    ? runes.filter((rune) => !/^(?:None|Empty)$/i.test(rune)).length : undefined;
   const itemLevelMatch = raw.match(/(?:Item Level|物品等级|物品等級)[:：]\s*(\d+)/i);
   const missing = mods.filter((mod) => !mod.searchable).length;
   if (missing) warnings.push(`${missing} 条文字尚未成为可搜索属性，估价条件不代表完整装备。`);
   return { raw, name: header[0]!, baseName: base ? (header.find((line) => normalize(line) === normalize(base.en) || normalize(line) === normalize(base.zh)) ?? base.zh) : header[header.length - 1]!,
     ...(base ? { baseNameEnglish: base.en } : {}), ...(unique ? { nameEnglish: unique.en } : {}), category, slot: slotOf(category), rarity,
+    ...(stateText.includes('已圣化') ? { sanctified: true } : {}),
     ...((unique?.icon ?? base?.icon) ? { icon: unique?.icon ?? base?.icon } : {}), ...(itemLevelMatch ? { itemLevel: Number(itemLevelMatch[1]) } : {}),
-    identified: !/(?:^|\n)\s*(?:Unidentified|未鉴定|未鑑定)\s*(?:\r?\n|$)/i.test(raw), corrupted: stateText.includes('双重腐化') || /(?:^|\n)(?:Corrupted|已腐化|已污染)(?:\r?\n|$)/i.test(raw),
+    ...(socketCount === undefined ? {} : { sockets: { count: socketCount, ...(filled === undefined ? {} : { filled }) } }),
+    identified: !/(?:^|\n)\s*(?:Unidentified|未鉴定|未鑑定)\s*(?:\r?\n|$)/i.test(raw), corrupted: stateText.includes('双重腐化') || /(?:^|\n)(?:Corrupted|已腐化|已污染|已汙染)(?:\r?\n|$)/i.test(raw),
     ...(stateText.includes('双重腐化') ? { doubleCorrupted: true } : {}), ...(flavourText.length ? { flavourText } : {}), ...(stateText.length ? { stateText } : {}),
     kind, ...(kind === 'waystone' && (tier ?? base?.mapTier) !== undefined ? { mapTier: tier ?? base?.mapTier } : {}),
     ...(ambiguous ? { officialTypeCandidates: distinct.map((item) => ({ type: item.en, category: item.category })) } : {}),
@@ -269,14 +318,37 @@ export function parseEquipment(raw: string): Equipment | null {
     twoHanded: /weapon\.(?:two|bow|crossbow|staff|warstaff|talisman)/.test(category), properties, mods, warnings };
 }
 
-/** Only additive, unconditional sheet stats are summed. Local rolls are already in printed properties. */
-export function equipmentMetricDetails(equipment: Equipment): { values: Record<string, number>; uncounted: string[] } {
-  const values: Record<string, number> = {}; const uncounted: string[] = [];
+export interface EquipmentMetricContext { filledSockets?: number }
+const socketMetrics: Record<string, readonly string[]> = {
+  '# to maximum Life': ['life'], '# to maximum Mana': ['mana'], '# to Spirit': ['spirit'],
+  '# to all Attributes': ['strength', 'dexterity', 'intelligence'],
+  '#% to all Elemental Resistances': ['fireResistance', 'coldResistance', 'lightningResistance'],
+  '#% to Chaos Resistance': ['chaosResistance'],
+  '# Life Regeneration per second': ['lifeRegeneration'],
+  '#% increased Global Armour, Evasion and Energy Shield': ['globalArmourPercent', 'globalEvasionPercent', 'globalEnergyShieldPercent'],
+  '#% increased Maximum Life': ['lifePercent'], '#% increased Maximum Mana': ['manaPercent'],
+};
+export const hasSocketScaling = (item: Equipment): boolean => item.mods.some((mod) => mod.ref?.endsWith(' per Socket filled'));
+export function occupiedSockets(equipment: Equipment, context: EquipmentMetricContext = {}): number | undefined {
+  const count = context.filledSockets ?? equipment.sockets?.filled;
+  return count !== undefined && Number.isInteger(count) && count >= 0 && count <= (equipment.sockets?.count ?? -1) ? count : undefined;
+}
+/** Printed local defence already includes quality and runes. Socket scaling needs a known occupancy;
+ * global increased-percent bonuses remain separate from flat item defence and final character totals. */
+export function equipmentMetricDetails(equipment: Equipment, context: EquipmentMetricContext = {}): {
+  values: Record<string, number>; uncounted: string[]; pending: string[]; explanations: string[];
+} {
+  const values: Record<string, number> = {}; const uncounted: string[] = [], pending: string[] = [], explanations: string[] = [];
+  const filled = occupiedSockets(equipment, context);
   const add = (key: string, value: number) => { values[key] = (values[key] ?? 0) + value; };
   const hasProperty = (name: string) => equipment.properties.some((property) => property.name === name);
   const printedSpirit = hasProperty('spirit');
   const absorbedLocal = (mod: EquipmentMod): boolean => {
     const id = mod.statId ?? '';
+    // The game's per-socket global modifiers also start with local_. The prefix alone
+    // does not mean the modifier is reflected in the item's printed defence.
+    if (mod.ref?.includes('Global') || mod.ref?.includes('per Socket filled')) return false;
+    if (mod.ref === '# to maximum Energy Shield' && equipment.category.startsWith('armour.')) return hasProperty('energyShield');
     if (!id.startsWith('local_')) return false;
     if (/physical_damage_reduction_rating/.test(id)) return hasProperty('armour');
     if (/evasion/.test(id)) return hasProperty('evasion');
@@ -297,12 +369,28 @@ export function equipmentMetricDetails(equipment: Equipment): { values: Record<s
     values.totalDps = (values.physicalDps ?? 0) + (values.elementalDps ?? 0) + (values.chaosDps ?? 0);
   }
   const simple: Record<string, string> = { '# to maximum Life': 'life', '# to maximum Mana': 'mana', '# to Spirit': 'spirit',
+    '# to maximum Energy Shield': 'energyShield', '# to Armour': 'armour', '# to Evasion Rating': 'evasion',
     '# to Strength': 'strength', '# to Dexterity': 'dexterity', '# to Intelligence': 'intelligence', '#% increased Movement Speed': 'movementSpeed',
     '#% to Fire Resistance': 'fireResistance', '#% to Cold Resistance': 'coldResistance', '#% to Lightning Resistance': 'lightningResistance', '#% to Chaos Resistance': 'chaosResistance' };
   for (const mod of equipment.mods) {
     const value = mod.value; const ref = mod.ref ?? '';
     const metric = simple[ref];
     if (value === undefined) { uncounted.push(mod.raw); continue; }
+    if (ref.endsWith(' per Socket filled')) {
+      const baseRef = ref.replace(/^\+/, '').replace(/ per Socket filled$/, '');
+      const keys = socketMetrics[baseRef];
+      if (!keys || filled === undefined) { uncounted.push(mod.raw); if (keys) pending.push(...keys); continue; }
+      const total = Math.round(value * filled * 1e6) / 1e6;
+      for (const key of keys) { if (key !== 'spirit' || !printedSpirit) add(key, total); }
+      explanations.push(`${mod.label}：${value} × ${filled} 个已镶嵌插槽 = ${total}${baseRef.includes('%') ? '%' : ''}`);
+      continue;
+    }
+    if (ref === '#% increased Global Armour, Evasion and Energy Shield') {
+      for (const key of ['globalArmourPercent', 'globalEvasionPercent', 'globalEnergyShieldPercent']) add(key, value);
+      continue;
+    }
+    if (ref === '# Life Regeneration per second' || ref === 'Regenerate # Life per second') { add('lifeRegeneration', value); continue; }
+    if (absorbedLocal(mod)) continue;
     if (metric) { if (metric !== 'spirit' || !printedSpirit) add(metric, value); continue; }
     if (ref === '# to all Attributes') { for (const key of ['strength', 'dexterity', 'intelligence']) add(key, value); continue; }
     if (ref === '#% to all Elemental Resistances') { for (const key of ['fireResistance', 'coldResistance', 'lightningResistance']) add(key, value); continue; }
@@ -310,8 +398,8 @@ export function equipmentMetricDetails(equipment: Equipment): { values: Record<s
       for (const [term, key] of [['Fire', 'fireResistance'], ['Cold', 'coldResistance'], ['Lightning', 'lightningResistance'], ['Chaos', 'chaosResistance'], ['Strength', 'strength'], ['Dexterity', 'dexterity'], ['Intelligence', 'intelligence']]) if (ref.includes(term!)) add(key!, value);
       continue;
     }
-    if (!absorbedLocal(mod)) uncounted.push(mod.raw);
+    uncounted.push(mod.raw);
   }
-  return { values, uncounted };
+  return { values, uncounted, pending: [...new Set(pending)], explanations };
 }
 export const equipmentMetrics = (equipment: Equipment): Record<string, number> => equipmentMetricDetails(equipment).values;

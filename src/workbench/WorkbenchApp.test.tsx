@@ -51,6 +51,7 @@ function savedSession(): { item: ExistingItem; targets: TargetInput[] } {
 
 async function ready() {
   const view = render(<WorkbenchApp />);
+  await userEvent.click(within(screen.getByRole('navigation', { name: '工作区域' })).getByRole('button', { name: '制作策略' }));
   await waitFor(() => expect(screen.getByRole('button', { name: /载入目标示例/ })).toBeEnabled());
   return view;
 }
@@ -74,7 +75,7 @@ describe('workbench target-source regression', () => {
     vi.stubGlobal('fetch', network);
     const before = savedSession();
     const { container } = render(<WorkbenchApp />);
-    expect(await screen.findByText('Dusk Trail')).toBeVisible();
+    await waitFor(() => expect(within(screen.getByRole('region', { name: '全物品查价' })).getByTitle('Dusk Trail')).toBeVisible());
     expect(container.querySelector('.wb-layout')).toHaveClass('is-equipment');
     expect(savedSession()).toMatchObject(before);
     expect(computeWorkbench).not.toHaveBeenCalled();
@@ -99,7 +100,7 @@ describe('workbench target-source regression', () => {
     await user.paste(BOOTS_SAMPLE);
     expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
     await user.click(screen.getByRole('button', { name: /识别并导入/ }));
-    expect(await screen.findByText('Dusk Trail')).toBeVisible();
+    await waitFor(() => expect(within(screen.getByRole('region', { name: '全物品查价' })).getByTitle('Dusk Trail')).toBeVisible());
     expect(container.querySelector('.wb-layout')).toHaveClass('is-equipment');
     expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
     expect(computeWorkbench).not.toHaveBeenCalled();

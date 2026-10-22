@@ -22,6 +22,11 @@ import TradePanel from './TradePanel';
 import EquipmentTradePanel from './EquipmentTradePanel';
 import TradeMemoryPanel from './TradeMemoryPanel';
 import LoadoutPanel from './LoadoutPanel';
+import { useSavedLoadout, writeSavedLoadout } from './loadoutStore';
+import { chooseComparisonSlot, type LoadoutContext } from './loadoutIntegration';
+import { slotLabel, type LoadoutSlot } from './loadout';
+import { currentLoadoutQuotes, type LoadoutQuote } from './loadoutQuotes';
+import { CURRENCIES } from './finance';
 import FinancePanel from './FinancePanel';
 import { parseEquipment } from './genericEquipment';
 import CraftAdvisor from './CraftAdvisor';
@@ -30,6 +35,8 @@ import { subscribeCompanion, publishCompanion, loadCompanionView, type Companion
 import { evaluateCheckpoint, type CraftCheckpoint, type CheckpointReview } from './craftCheckpoint';
 import { CraftCheckpointPanel } from './CraftCheckpointPanel';
 import './workbench.css';
+import './streamlined.css';
+import Icon, { IconButton } from './WorkbenchIcon';
 
 type Tab = 'plan' | 'simulate' | 'trade' | 'gear' | 'finance' | 'settings';
 interface Session {
@@ -90,9 +97,11 @@ function readReview(value: unknown): CheckpointReview | null {
 }
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'gear', label: '角色装备', icon: 'equipment' },
-  { id: 'finance', label: '交易与损益', icon: 'sliders' },
-  { id: 'plan', label: '制作策略', icon: 'route' }, { id: 'simulate', label: '自由模拟', icon: 'hammer' },
-  { id: 'trade', label: '官方查价', icon: 'search' }, { id: 'settings', label: '数据与价格', icon: 'sliders' },
+  { id: 'trade', label: '官方查价', icon: 'search' },
+  { id: 'plan', label: '制作策略', icon: 'route' },
+  { id: 'finance', label: '交易追踪', icon: 'ledger' },
+  { id: 'simulate', label: '自由模拟', icon: 'hammer' },
+  { id: 'settings', label: '数据与价格', icon: 'sliders' },
 ];
 const SOURCE_NAMES: Record<string, string> = { normal: '普通词缀', essence: '普通精华专属', perfect: '完美精华专属', alloy: '合金专属', desecrated: '亵渎专属', rune: '符文词缀' };
 const RARITY_NAMES = { normal: '普通', magic: '魔法', rare: '稀有' };
@@ -102,30 +111,15 @@ const CURRENCY_LABELS: Record<string, string> = {
   regal_greater: '高阶富豪石', regal_perfect: '完美富豪石', exalt_greater: '高阶崇高石', exalt_perfect: '完美崇高石',
   chaos_greater: '高阶混沌石', chaos_perfect: '完美混沌石', divine: '神圣石', desecrate: '亵渎材料',
 };
-function Icon({ name, size = 18 }: { name: string; size?: number }) {
-  const paths: Record<string, React.ReactNode> = {
-    route: <><path d="M5 5h5v5H5zM14 14h5v5h-5zM7.5 10v6.5H14M10 7.5h6.5V14" /></>,
-    hammer: <><path d="m13 3 8 8-3 3-8-8zM12 10 3 19l2 2 9-9M9 5l3-3" /></>,
-    search: <><circle cx="10" cy="10" r="6" /><path d="m15 15 6 6" /></>,
-    sliders: <><path d="M4 7h16M4 17h16" /><circle cx="9" cy="7" r="3" /><circle cx="15" cy="17" r="3" /></>,
-    arrow: <path d="M4 12h15m-6-6 6 6-6 6" />,
-    external: <><path d="M14 3h7v7M21 3 11 13M10 5H4v16h16v-6" /></>,
-    ring: <><ellipse cx="12" cy="15" rx="7" ry="6" /><path d="m8 5 4-3 4 3-4 5zM8 5h8M9 10l-2-2M15 10l2-2" /></>,
-    equipment: <><path d="m8 3 4 2 4-2 5 5-3 4-2-1v10H8V11l-2 1-3-4z" /><path d="M9 4v4h6V4" /></>,
-    plus: <path d="M12 5v14M5 12h14" />,
-    paste: <><path d="M9 5H5v16h14V5h-4M9 3h6v5H9zM8 12h8M8 16h6" /></>,
-    check: <path d="m5 12 4 4L19 6" />,
-    undo: <><path d="M8 5 3 10l5 5M3 10h11a6 6 0 0 1 0 12" /></>,
-  };
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] ?? paths.ring}</svg>;
-}
 
 export default function WorkbenchApp() {
   const [session, setSession] = useState<Session>(loadSession);
+  const savedLoadout = useSavedLoadout();
+  const [loadoutCandidate, setLoadoutCandidate] = useState<{ id: string; raw: string; slot?: LoadoutSlot }>();
   const { item, targets, baseName, options, overrides, league } = session;
   const [engine, setEngine] = useState<Engine | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [tab, setTab] = useState<Tab>('plan');
+  const [tab, setTab] = useState<Tab>('gear');
   const [search, setSearch] = useState('');
   const [side, setSide] = useState<'all' | 'prefix' | 'suffix'>('all');
   const [source, setSource] = useState<'all' | EngineMod['source']>('normal');
@@ -151,9 +145,11 @@ export default function WorkbenchApp() {
   const [tradeData, setTradeData] = useState<GearTrade | null>(null);
   const [simulation, setSimulation] = useState<{ before: ExistingItem; after: ExistingItem; label: string; cost: number; priceKnown: boolean }[]>([]);
   const [historyAt, setHistoryAt] = useState(0);
+  const [showUnavailable, setShowUnavailable] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(!session.targets.length);
   const [profitInputs, setProfitInputs] = useState({ current: '', quick: '', fair: '', optimistic: '' });
   const [quickPrice, setQuickPrice] = useState<{ id: string; deliveryToken?: string; raw: string; item: ExistingItem; baseName: string; warnings: readonly string[]; complete: boolean } | null>(null);
-  const [equipmentPrice, setEquipmentPrice] = useState<{ id: string; deliveryToken?: string; raw: string; source: 'hotkey' | 'paste' | 'loadout' | 'view'; intent: 'price' | 'upgrade' | 't1' } | null>(null);
+  const [equipmentPrice, setEquipmentPrice] = useState<{ id: string; deliveryToken?: string; raw: string; source: 'hotkey' | 'paste' | 'loadout' | 'view'; intent: 'price' | 'upgrade' | 't1'; loadoutSlot?: LoadoutSlot } | null>(null);
   const runner = useRef<ReturnType<typeof computeWorkbench> | null>(null);
   const lastSignature = useRef('');
   const importRecoveryChecked = useRef(false);
@@ -244,12 +240,29 @@ export default function WorkbenchApp() {
     update({ baseName: base.english, item: { ...item, baseId: base.category, prefixes: [], suffixes: [], rarity: 'normal' }, targets: [], raw: '', actualRollsInvalid: false, checkpoint: null, checkpointReview: null });
     setBlockedReason(''); setNeedsReview(false); setImportWarnings([]); setSimulation([]); setHistoryAt(0); setNotice('');
   }
-  function openEquipmentPrice(raw: string, source: 'hotkey' | 'paste' | 'loadout' | 'view', intent: 'price' | 'upgrade' | 't1' = 'price', packet?: CompanionPacket): boolean {
+  function openEquipmentPrice(raw: string, source: 'hotkey' | 'paste' | 'loadout' | 'view', intent: 'price' | 'upgrade' | 't1' = 'price', packet?: CompanionPacket, loadoutSlot?: LoadoutSlot): boolean {
     const equipment = parseEquipment(raw);
     if (!equipment) { setNotice('没有识别到可查价的物品，请复制完整物品文本（包含稀有度和名称）。'); return false; }
-    setEquipmentPrice({ id: packet?.id ?? crypto.randomUUID(), deliveryToken: packet?.deliveryToken, raw, source, intent });
+    setEquipmentPrice({ id: packet?.id ?? crypto.randomUUID(), deliveryToken: packet?.deliveryToken, raw, source, intent, loadoutSlot });
     setQuickPrice(null); setTab('trade'); setPasteOpen(false);
     return true;
+  }
+  const loadoutContext: LoadoutContext | undefined = equipmentPrice?.loadoutSlot ? { state: savedLoadout.state, slot: equipmentPrice.loadoutSlot, raw: equipmentPrice.raw } : undefined;
+  const craftQuote = session.actualRollsInvalid ? undefined : currentLoadoutQuotes(savedLoadout.state, league).find(({ quote }) => quote.itemText === session.raw)?.quote;
+  function compareWithLoadout(equipment: ReturnType<typeof parseEquipment>) {
+    if (!equipment) return;
+    const slot = chooseComparisonSlot(savedLoadout.state, equipment, equipmentPrice?.loadoutSlot);
+    if (!slot) { setNotice('这个物品暂无对应的角色装备栏位。'); return; }
+    setLoadoutCandidate({ id: crypto.randomUUID(), raw: equipment.raw, slot }); setTab('gear');
+    setNotice(`候选已送入${slotLabel(slot)}比较，尚未替换当前装备；可在角色页调整比较栏位。`);
+  }
+  function recordLoadoutQuote(quote: Omit<LoadoutQuote, 'itemText'>) {
+    const context = loadoutContext;
+    if (!context || context.state.slots[context.slot] !== context.raw || quote.league !== league || savedLoadout.error) {
+      setNotice('角色装备或赛季已变化，请从当前装备栏重新查价后记录。'); return;
+    }
+    const error = writeSavedLoadout({ ...context.state, quotes: { ...context.state.quotes, [context.slot]: { ...quote, itemText: context.raw } } }, savedLoadout.raw);
+    setNotice(error || `已记录${slotLabel(context.slot)}的挂牌参考，角色页和资产记录可复用；不代表实际成交价。`);
   }
   function importText(text = session.raw, purpose: 'auto' | 'checkpoint' | 'new-craft' = 'auto') {
     const general = purpose === 'auto' ? parseEquipment(text) : null;
@@ -463,18 +476,14 @@ export default function WorkbenchApp() {
   }
 
   return <div className="wb-app">
-    <aside className="wb-rail"><a className="wb-brand-mark" href="#" aria-label="PoE2 制作工坊"><Icon name="ring" size={30} /></a><div className="wb-rail-line" />
-      {TABS.map((entry) => <button key={entry.id} title={entry.label} aria-label={entry.label} className={tab === entry.id ? 'active' : ''} onClick={() => setTab(entry.id)}><Icon name={entry.icon} size={21} /></button>)}
-      <span className="wb-rail-bottom">II</span>
-    </aside>
     <div className="wb-shell">
       <header className="wb-header"><div><span className="wb-eyebrow">PATH OF EXILE 2 · PERSONAL WORKBENCH</span><h1>制作工坊 <span>CRAFT LAB</span></h1></div>
         <div className="wb-header-meta"><span className="wb-local"><i /> 本地计算</span><span className="wb-chip">国际服 · 简体界面</span><a href="https://www.pathofexile.com/trade2" target="_blank" rel="noreferrer">官方交易 <Icon name="external" size={14} /></a></div>
       </header>
-      <section className="wb-intro"><div><span className="wb-eyebrow">从你手里的装备，找到下一步。</span><h2>先算清楚，再花通货<span>。</span></h2><p>全物品查价、保存角色装备并比较换装；戒指和项链可继续规划制作。</p></div>
-        <button className="wb-button primary" onClick={() => { if (!pasteOpen) setPasteDraft(session.raw); setPasteOpen(!pasteOpen); }}><Icon name="paste" /> {pasteOpen ? '收起导入' : '粘贴游戏物品'} <span>Ctrl + Alt + C</span></button>
-      </section>
-      <div className="wb-data-strip"><span><i /> 规则快照 <b>{engine?.data.patch ?? '加载中'}</b> · 与 0.5.5e 差异待核验</span><span>价格 <b>{basis?.asOf?.slice(0, 10) ?? '加载中'}</b> · {basis?.league ?? '—'}</span><button onClick={() => setTab('settings')}>查看来源与价格设置 <Icon name="arrow" size={13} /></button></div>
+      <div className="wb-command-bar"><nav className="wb-tabs" aria-label="工作区域">{TABS.filter((entry) => entry.id !== 'simulate' && entry.id !== 'settings').map((entry) => <button key={entry.id} onClick={() => setTab(entry.id)} aria-current={tab === entry.id ? 'page' : undefined} className={tab === entry.id ? 'active' : ''}><Icon name={entry.icon} size={19} />{entry.label}</button>)}</nav>
+        <div className="wb-command-actions"><button className="wb-button primary" onClick={() => { if (!pasteOpen) setPasteDraft(session.raw); setPasteOpen(!pasteOpen); }} aria-expanded={pasteOpen}><Icon name="paste" /> {pasteOpen ? '收起导入' : '粘贴游戏物品'}</button><IconButton icon="hammer" label="自由模拟" aria-pressed={tab === 'simulate'} onClick={() => setTab('simulate')} /><IconButton icon="sliders" label="数据与价格" aria-pressed={tab === 'settings'} onClick={() => setTab('settings')} /></div>
+      </div>
+      {tab === 'plan' && <div className="wb-compact-basis">规则 {engine?.data.patch ?? '加载中'} · 与 0.5.5e 差异待核验 · 价格 {basis?.asOf?.slice(0, 10) ?? '加载中'}<button className="wb-text-button" onClick={() => setTab('settings')}>查看来源</button></div>}
       {loadError && <div role="alert" className="wb-alert error">数据加载失败：{loadError}<button onClick={() => window.location.reload()}>重新加载</button></div>}
       {notice && <div className="wb-alert" role="status">{notice}<button aria-label="关闭提示" onClick={() => setNotice('')}>×</button></div>}
       {pasteOpen && <section className="wb-panel wb-paste"><div className="wb-section-head"><h3>导入游戏物品</h3><span>支持繁体中文、简体中文与英文；无法确认的词缀会保留提示。</span></div>
@@ -482,25 +491,24 @@ export default function WorkbenchApp() {
         <div className="wb-actions"><button className="wb-button primary" disabled={!pasteDraft.trim()} onClick={() => importText(pasteDraft)}>识别并导入 <Icon name="arrow" size={16} /></button><button className="wb-button" onClick={() => { setTab('gear'); setPasteOpen(false); }}>打开全身装备栏</button><button className="wb-button" disabled={!engine} onClick={() => importText(EXAMPLE_RING)}>试用戒指示例</button><button className="wb-button" disabled={!engine} onClick={() => importText(EXAMPLE_AMULET)}>试用项链示例</button></div>
       </section>}
       {importWarnings.length > 0 && <div className="wb-alert warning"><div><strong>导入核对</strong><ul>{importWarnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul><div className="wb-actions"><button className="wb-button" disabled={!engine || !session.raw.trim()} onClick={() => importText()}>重新识别当前原文</button>{needsReview && !blockedReason && <button className="wb-button" onClick={() => { setNeedsReview(false); setImportWarnings([]); setNotice('已使用你人工核对后的当前词缀。'); }}>我已补齐并核对当前词缀</button>}</div></div></div>}
-      <nav className="wb-tabs" aria-label="工作区域">{TABS.map((entry) => <button key={entry.id} onClick={() => setTab(entry.id)} className={tab === entry.id ? 'active' : ''}><Icon name={entry.icon} size={16} />{entry.label}{entry.id === 'plan' && <span>01</span>}</button>)}</nav>
-      <div className={`wb-layout${tab === 'gear' || tab === 'finance' || (tab === 'trade' && equipmentPrice) ? ' is-equipment' : ''}`}>
+      <div className={`wb-layout${tab === 'gear' || tab === 'finance' || tab === 'settings' || (tab === 'trade' && equipmentPrice) ? ' is-equipment' : ''}`}>
         <aside className="wb-item-column">
           <section className="wb-panel"><div className="wb-section-head"><h3>当前装备</h3><span className="wb-tag">起点</span></div>
             <div className={`wb-item-card ${item.rarity}`}><OfficialItemArt baseName={baseName} label={baseInfo?.simplified ?? translateBase(baseName)} fallback={<Icon name="ring" size={74} />} /><small>{RARITY_NAMES[item.rarity]} · {item.baseId === 'Rings' ? '戒指' : '项链'}</small><h3>{baseInfo?.simplified ?? translateBase(baseName)}</h3><p>{baseName}</p><div className="wb-item-stats"><span>物品等级 <b>{item.level}</b></span><span>前缀 <b>{item.prefixes.length}/3</b></span><span>后缀 <b>{item.suffixes.length}/3</b></span></div></div>
-            <div className="wb-fields"><label>装备类型<select aria-label="装备类型" value={item.baseId} onChange={(event) => chooseBase(event.target.value === 'Rings' ? 'Amethyst Ring' : 'Stellar Amulet')}><option value="Rings">戒指</option><option value="Amulets">项链</option></select></label>
+            <details className="wb-fold"><summary>修改底座、稀有度与物等</summary><div className="wb-fields"><label>装备类型<select aria-label="装备类型" value={item.baseId} onChange={(event) => chooseBase(event.target.value === 'Rings' ? 'Amethyst Ring' : 'Stellar Amulet')}><option value="Rings">戒指</option><option value="Amulets">项链</option></select></label>
               <label>物品等级<input aria-label="物品等级" type="number" min="1" max="100" value={item.level} onChange={(event) => setItem({ ...item, level: Number(event.target.value) })} /></label>
               <label className="wide">装备底座<select aria-label="装备底座" value={baseName} onChange={(event) => chooseBase(event.target.value)}>{JEWELLERY_BASES.filter((base) => base.category === item.baseId).map((base) => <option key={base.english} value={base.english}>{base.simplified} · {base.english}{base.supported ? '' : '（特殊规则未支持）'}</option>)}</select></label>
               <label className="wide">当前稀有度<select aria-label="当前稀有度" value={item.rarity} onChange={(event) => setItem({ ...item, rarity: event.target.value as ExistingItem['rarity'] })}><option value="normal">普通 · 从空白底座开始</option><option value="magic">魔法 · 已有装备</option><option value="rare">稀有 · 已有装备</option></select></label>
-            </div>
+            </div></details>
             {[...item.prefixes, ...item.suffixes].length ? <div className="wb-current-mods">{[...item.prefixes, ...item.suffixes].map((entry) => renderMod(entry, false))}</div> : <p className="wb-empty-small">目前没有显式词缀。可以粘贴装备，或从词缀库手动补充。</p>}
-            <button className="wb-text-button" onClick={() => { setPickerMode('current'); setTab('plan'); }}>手动编辑当前词缀 <Icon name="plus" size={14} /></button>
+            <button className="wb-text-button" onClick={() => { setPickerMode('current'); setLibraryOpen(true); setTab('plan'); }}>手动编辑当前词缀 <Icon name="plus" size={14} /></button>
             {restriction && <p className="wb-inline-warning">{restriction}</p>}
           </section>
           <section className="wb-panel wb-notebook"><span className="wb-eyebrow">使用方式</span><h3>每做一步，更新一次。</h3><p>在游戏里使用通货后，重新复制装备。目标会保留，系统从新的状态计算。</p><button className="wb-text-button" onClick={() => setPasteOpen(true)}>更新装备状态 <Icon name="arrow" size={14} /></button></section>
           <div className="wb-attribution">基于 <a href="https://github.com/Dboire9/POE2_HTC" target="_blank" rel="noreferrer">POE2_HTC</a> · AGPL-3.0<br />词缀参考 PoE2DB / PoE2 Wiki<br />本工具为个人制作辅助，价格并非成交保证。</div>
         </aside>
         <main className="wb-main">
-          <div hidden={tab !== 'gear'}><LoadoutPanel league={league} onPrice={(raw, intent) => { openEquipmentPrice(raw, 'loadout', intent); }} onCraft={(raw) => { setQuickPrice(null); setEquipmentPrice(null); setTab('plan'); importText(raw, 'new-craft'); }} /></div>
+          <div className="wb-loadout-host" hidden={tab !== 'gear'}><LoadoutPanel key={loadoutCandidate?.id ?? 'loadout'} candidate={loadoutCandidate} league={league} onPrice={(raw, intent, slot) => { openEquipmentPrice(raw, 'loadout', intent, undefined, slot); }} onCraft={(raw) => { setQuickPrice(null); setEquipmentPrice(null); setTab('plan'); importText(raw, 'new-craft'); }} /></div>
           <div className="wb-finance-view" hidden={tab !== 'finance'}><FinancePanel league={league} /></div>
           {tab === 'plan' && engine && <CraftCheckpointPanel item={item} baseName={baseName} targets={targets} mods={modById} anchor={session.checkpoint ?? null} review={session.checkpointReview ?? null} suggestedAction={currentNode?.action} onAnchor={(checkpoint) => update({ checkpoint, checkpointReview: null })} onCheckText={(raw) => { importText(raw, 'checkpoint'); }} onRecalculate={() => { if (!validation && !advisorBusy && !solving) void calculate(); else document.querySelector('.wb-compute')?.scrollIntoView({ behavior: 'smooth' }); }} />}
           {engine && <div hidden={tab !== 'plan'}><CraftAdvisor engine={engine} mods={modById} item={item} targets={targets} baseName={baseName} options={options} overrides={overrides} restriction={restriction} league={league} tradeData={tradeData} effort={effort} baseCost={session.baseCost} playOut={playOut} currentResult={stale ? null : result} mainSolving={solving} onBusyChange={setAdvisorBusy} onAdopt={adoptAdvice} /></div>}
@@ -509,7 +517,7 @@ export default function WorkbenchApp() {
               {targets.length ? <div className="wb-targets">{targets.map((entry) => renderMod(entry, true))}</div> : <div className="wb-goal-empty"><Icon name="plus" size={24} /><div><strong>从下方词缀库添加目标</strong><p>按物等筛选可用阶级，T1 为最高阶；其他词缀允许保留。</p></div></div>}
               <div className="wb-goal-footer"><span>{targets.filter((entry) => modById.get(entry.modId)?.type === 'prefix').length}/3 前缀 <i /> {targets.filter((entry) => modById.get(entry.modId)?.type === 'suffix').length}/3 后缀 · 稀有成品</span><div><button className="wb-text-button" onClick={() => update({ targets: [...item.prefixes, ...item.suffixes].map(({ modId, tierDisplay }) => ({ modId, tierDisplay })) })} disabled={!item.prefixes.length && !item.suffixes.length}>以当前词缀为目标</button><button className="wb-text-button muted" onClick={() => update({ targets: [] })}>清空</button></div></div>
             </section>
-            <section className="wb-panel wb-library"><div className="wb-section-head"><div><span className="wb-eyebrow">AFFIX LIBRARY</span><h3>底座词缀库 <span className="wb-count">{filteredMods.length}</span></h3></div><div className="wb-segment"><button className={pickerMode === 'target' ? 'active' : ''} onClick={() => setPickerMode('target')}>添加到目标</button><button className={pickerMode === 'current' ? 'active' : ''} onClick={() => setPickerMode('current')}>添加到当前</button></div></div>
+            <details className="wb-panel wb-library" open={libraryOpen} onToggle={(event) => setLibraryOpen(event.currentTarget.open)}><summary>编辑目标词缀 · 底座词缀库 <span className="wb-count">{filteredMods.length}</span></summary><div className="wb-section-head"><div><span className="wb-eyebrow">AFFIX LIBRARY</span><h3>底座词缀库 <span className="wb-count">{filteredMods.length}</span></h3></div><div className="wb-segment"><button className={pickerMode === 'target' ? 'active' : ''} onClick={() => setPickerMode('target')}>添加到目标</button><button className={pickerMode === 'current' ? 'active' : ''} onClick={() => setPickerMode('current')}>添加到当前</button></div></div>
               <div className="wb-library-controls"><label className="wb-search"><Icon name="search" size={16} /><input aria-label="搜索词缀" placeholder="搜索生命、抗性、施法速度…" value={search} onChange={(event) => setSearch(event.target.value)} /></label><select aria-label="词缀类型" value={side} onChange={(event) => setSide(event.target.value as typeof side)}><option value="all">全部词缀</option><option value="prefix">仅前缀</option><option value="suffix">仅后缀</option></select><select aria-label="词缀来源" value={source} onChange={(event) => setSource(event.target.value as typeof source)}><option value="normal">普通词缀</option><option value="all">所有来源</option><option value="essence">普通精华专属</option><option value="perfect">完美精华专属</option><option value="alloy">合金专属</option><option value="desecrated">亵渎专属</option></select></div>
               <div className="wb-pool-head"><span>词缀 / 来源</span><span>最高可用阶级</span><span /></div><div className="wb-pool-list">{filteredMods.map((mod) => {
                 const best = mod.tiers.find((tier) => tier.ilvl <= item.level)!;
@@ -519,13 +527,13 @@ export default function WorkbenchApp() {
                 return <div className="wb-pool-row" key={mod.id} data-mod-id={mod.id}><span className={`wb-dot ${mod.type}`} /><div><strong>{translateMod(mod.text)} <span className={`wb-source-badge source-${mod.source}`}>{SOURCE_NAMES[mod.source]}</span></strong><small>{mod.type === 'prefix' ? '前缀' : '后缀'}<span title={mod.text}> · {mod.text}</span></small>{issue && <p className="wb-pool-issue">{issue}</p>}</div><span className="wb-tier">T{(usableTier ?? best).display}<small>物等 {(usableTier ?? best).ilvl}+</small></span><button title={selected ? '已添加' : issue ?? `添加${translateMod(mod.text)}`} aria-label={`添加${SOURCE_NAMES[mod.source]}：${translateMod(mod.text)}`} disabled={selected || Boolean(issue)} onClick={() => addMod(mod)}>{selected ? <Icon name="check" size={16} /> : <Icon name="plus" size={17} />}</button></div>;
               })}{!filteredMods.length && <p className="wb-empty-small">{engine ? '没有匹配词缀，试试其他关键词或检查物品等级。' : '正在读取本地词缀数据…'}</p>}</div>
               <div className="wb-library-note">默认展示普通词缀。精华、完美精华与亵渎为不同来源；普通精华需要魔法装备，不能在稀有装备上新增其专属词缀。</div>
-            </section>
+            </details>
             <section className="wb-panel wb-compute"><div className="wb-section-head"><div><span className="wb-eyebrow">02 / FIND A CRAFTING POLICY</span><h3>计算通货顺序</h3></div><select aria-label="搜索精度" value={effort} onChange={(event) => setEffort(Number(event.target.value))}><option value={5_000}>快速 · 约 5 秒</option><option value={15_000}>标准 · 约 15 秒</option><option value={60_000}>深入 · 约 60 秒</option></select></div>
-              <div className="wb-checks">{([['strengths', '高阶／完美通货'], ['omens', '预兆'], ['essences', '精华／合金'], ['desecration', '亵渎（含估计权重）']] as const).map(([key, label]) => <label key={key}><input type="checkbox" checked={options[key]} onChange={(event) => update({ options: { ...options, [key]: event.target.checked } })} />{label}</label>)}</div>
+              <details className="wb-fold"><summary>通货范围与计算选项</summary><div className="wb-checks">{([['strengths', '高阶／完美通货'], ['omens', '预兆'], ['essences', '精华／合金'], ['desecration', '亵渎（含估计权重）']] as const).map(([key, label]) => <label key={key}><input type="checkbox" checked={options[key]} onChange={(event) => update({ options: { ...options, [key]: event.target.checked } })} />{label}</label>)}</div>
               <label className="wb-check"><input type="checkbox" checked={playOut} onChange={(event) => setPlayOut(event.target.checked)} /> 同时抽样验证成本分布与材料消耗（额外计算时间）</label>
               {[...item.prefixes, ...item.suffixes].some((entry) => entry.fractured) && <p className="wb-fine">已有破裂词缀会自动作为保留条件加入求解，并占用对应槽位。计算不会假设能移除它们。</p>}
               {item.rarity === 'normal' && <label className="wb-inline-field">每次重新购买底座的成本<input aria-label="底座成本" type="number" min="0" step="0.1" value={session.baseCost} onChange={(event) => update({ baseCost: Math.max(0, Number(event.target.value)) })} /><span>Ex · 当前默认不计底座成本</span></label>}
-              <div className="wb-compute-bottom"><p>{advisorBusy ? '正在比较建议方案的成本；完成或停止评估后，可计算自定目标。' : validation ?? (item.rarity === 'normal' ? '从空白底座开始；可按所填成本更换底座重试。' : '从当前装备继续；策略不假设可以免费重置回原装备。')}</p><button className={`wb-button ${solving ? '' : 'primary'}`} disabled={!engine || (!solving && (Boolean(validation) || advisorBusy))} onClick={() => solving ? runner.current?.cancel() : void calculate()}>{solving ? '取消计算' : '计算制作策略'}{!solving && <Icon name="arrow" />}</button></div>
+              </details><div className="wb-compute-bottom"><p>{advisorBusy ? '正在比较建议方案的成本；完成或停止评估后，可计算自定目标。' : validation ?? (item.rarity === 'normal' ? '从空白底座开始；可按所填成本更换底座重试。' : '从当前装备继续；策略不假设可以免费重置回原装备。')}</p><button className={`wb-button ${solving ? '' : 'primary'}`} disabled={!engine || (!solving && (Boolean(validation) || advisorBusy))} onClick={() => solving ? runner.current?.cancel() : void calculate()}>{solving ? '取消计算' : '计算制作策略'}{!solving && <Icon name="arrow" />}</button></div>
               {solving && <div className="wb-progress" role="status"><div><span>正在{progress?.phase === 'plan' ? '搜索制作路线' : progress?.phase === 'playout' ? '验证成本分布' : '求解后续决策'}…</span><span>{Math.round((progress?.fraction ?? 0) * 100)}%</span></div><progress max={1} value={progress?.fraction ?? 0} /></div>}
               {solveError && <CraftReason reason={solveError} engine={engine} />}
             </section>
@@ -537,7 +545,7 @@ export default function WorkbenchApp() {
               {currentNode && <PolicyView node={currentNode} result={result} onNode={setSelectedNode} />}
               {currentNode?.action && <button className="wb-text-button" onClick={() => document.querySelector('.wb-checkpoint')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>设置这一步的制作锚点 ↑</button>}
               {plan && <details className="wb-details" open={!currentNode}><summary>固定制作路线对照 · {plan.frontier.length} 条</summary><p>以下是固定分支路线。现有装备的“重置后重试”成本不用于上方期望成本，请优先参考动态策略。</p>{plan.reason && <CraftReason reason={plan.reason} engine={engine} />}{plan.truncated && <p className="wb-inline-warning">路线搜索达到上限，可以提高搜索精度重算。</p>}{plan.frontier.slice(0, 5).map((route, routeIndex) => <div className="wb-route" key={routeIndex}><div className="wb-route-title"><strong>路线 {routeIndex + 1}</strong><span>单次分支命中 {formatPercent(route.probability)} · 单次材料 {formatCost(route.perAttempt)} Ex</span></div>{route.steps.map((step) => <div className="wb-step" key={step.n}><b>{String(step.n).padStart(2, '0')}</b><div><strong className="wb-currency-label"><OfficialCurrencyIcon currencyId={getCurrencyImageIdForAction(step.label)} label={translateCurrency(step.label)} />{translateCurrency(step.label)}</strong><span>{translateMod(step.target)}</span></div><span>{formatPercent(step.prob)}</span></div>)}</div>)}</details>}
-              {markov?.replay && <><div className="wb-section-head"><h3>策略抽样验证</h3><span>{markov.replay.runs.toLocaleString()} 次完整运行</span></div><div className="wb-percentiles">{[50, 75, 90, 95].map((p) => <div key={p}><small>P{p} 成本</small><strong>{formatCost(markov.replay!.costPercentiles[p] ?? 0)} <span>Ex</span></strong></div>)}</div><p className="wb-fine">抽样均值 {formatCost(markov.replay.meanCost)} Ex；标准误差 {formatCost(markov.replay.stdErr)} Ex。分位数来自抽样，不是精确概率。</p><div className="wb-resource-table">{markov.replay.spendByMove.map((move) => <div key={move.label}><span>{translateCurrency(move.label)}</span><span>平均 {formatCost(move.count)} 次</span><b>{formatCost(move.spent)} Ex</b></div>)}</div></>}
+              {markov?.replay && <details className="wb-details"><summary>抽样校验与材料消耗</summary><div className="wb-section-head"><h3>策略抽样验证</h3><span>{markov.replay.runs.toLocaleString()} 次完整运行</span></div><div className="wb-percentiles">{[50, 75, 90, 95].map((p) => <div key={p}><small>P{p} 成本</small><strong>{formatCost(markov.replay!.costPercentiles[p] ?? 0)} <span>Ex</span></strong></div>)}</div><p className="wb-fine">抽样均值 {formatCost(markov.replay.meanCost)} Ex；标准误差 {formatCost(markov.replay.stdErr)} Ex。分位数来自抽样，不是精确概率。</p><div className="wb-resource-table">{markov.replay.spendByMove.map((move) => <div key={move.label}><span>{translateCurrency(move.label)}</span><span>平均 {formatCost(move.count)} 次</span><b>{formatCost(move.spent)} Ex</b></div>)}</div></details>}
               {markov?.replayReason && <CraftReason reason={markov.replayReason} engine={engine} />}
             </section>}
           </>}
@@ -548,14 +556,19 @@ export default function WorkbenchApp() {
               const image = getOfficialCurrencyImage(action.id);
               return image ? <a key={action.id} href={image.sourceUrl} target="_blank" rel="noreferrer">{CURRENCY_LABELS[action.id] ?? action.label} ↗</a> : null;
             })}</div></details>
-            <div className="wb-currency-grid">{simActions.map((action) => <button key={action.id} className="wb-currency" disabled={!action.feasible || Boolean(restriction)} title={action.reason ?? action.description} onClick={() => simulate(action.id)}><OfficialCurrencyIcon currencyId={action.id} label={CURRENCY_LABELS[action.id] ?? translateCurrency(action.label)} size="card" /><strong>{CURRENCY_LABELS[action.id] ?? translateCurrency(action.label)}</strong><small>{action.description}</small><b>{action.priceKnown ? `${formatCost(action.cost)} Ex` : '价格缺失'}</b>{!action.feasible && <span className="wb-disabled-reason">{action.reason}</span>}</button>)}</div>
+            <label className="wb-check wb-sim-visibility"><input type="checkbox" checked={showUnavailable} onChange={(event) => setShowUnavailable(event.target.checked)} />显示当前不可用的通货</label><div className="wb-currency-grid wb-compact-currencies">{simActions.filter((action) => showUnavailable || action.feasible).map((action) => <button key={action.id} className="wb-currency" disabled={!action.feasible || Boolean(restriction)} title={action.reason ?? action.description} onClick={() => simulate(action.id)}><OfficialCurrencyIcon currencyId={action.id} label={CURRENCY_LABELS[action.id] ?? translateCurrency(action.label)} size="card" /><strong>{CURRENCY_LABELS[action.id] ?? translateCurrency(action.label)}</strong><small>{action.description}</small><b>{action.priceKnown ? `${formatCost(action.cost)} Ex` : '价格缺失'}</b>{!action.feasible && <span className="wb-disabled-reason">{action.reason}</span>}</button>)}</div>
             <div className="wb-section-head"><h3>操作记录</h3><span>仅保留当前会话</span></div>{simulation.length ? <div className="wb-history">{simulation.map((entry, index) => <div className={index >= historyAt ? 'undone' : ''} key={index}><b>{String(index + 1).padStart(2, '0')}</b><span>{translateCurrency(entry.label)}</span><small>{entry.priceKnown ? `${formatCost(entry.cost)} Ex` : '价格缺失'}</small></div>)}</div> : <div className="wb-empty-state"><Icon name="hammer" size={32} /><h3>从第一步开始试做</h3><p>上方会根据当前稀有度、槽位与物等启用可用通货。</p></div>}
           </section>}
           {tab === 'trade' && <section className="wb-panel">
             <TradeMemoryPanel league={league} onOpenItem={(raw) => { openEquipmentPrice(raw, 'paste'); }} />
             {(quickPrice || equipmentPrice) && <div className="wb-alert wb-companion-banner"><div><strong>{equipmentPrice?.source === 'loadout' ? '角色装备查价' : equipmentPrice?.source === 'paste' ? '全物品查价' : '快捷键查价装备'}</strong><p>此次查价独立于正在制作的装备。</p>{quickPrice?.warnings.map((warning, index) => <p key={index}>{warning}</p>)}</div><div className="wb-actions"><button className="wb-text-button" onClick={() => setTab('gear')}>回到角色装备</button><button className="wb-text-button" onClick={() => { setQuickPrice(null); setEquipmentPrice(null); }}>返回做装装备</button></div></div>}
-            {equipmentPrice ? <EquipmentTradePanel t1Data={engine?.data} t1Trade={tradeData} key={`${equipmentPrice.id}:${equipmentPrice.deliveryToken ?? ''}:${equipmentPrice.intent}`} raw={equipmentPrice.raw} league={league} onLeague={(value) => update({ league: value })} leagues={leagues} leagueError={leagueError} intent={equipmentPrice.intent} autoEstimate={equipmentPrice.source === 'hotkey' || equipmentPrice.source === 'view'} onEstimate={equipmentPrice.source === 'hotkey' ? (summary) => { void publishCompanion(equipmentPrice.id, { ...summary, status: summary.status ?? 'ready' }, equipmentPrice.deliveryToken); } : undefined} />
+            {equipmentPrice ? <EquipmentTradePanel t1Data={engine?.data} t1Trade={tradeData} key={`${equipmentPrice.id}:${equipmentPrice.deliveryToken ?? ''}:${equipmentPrice.intent}:${equipmentPrice.intent === 'upgrade' ? JSON.stringify(savedLoadout.state.goals) : ''}`} raw={equipmentPrice.raw} league={league} onLeague={(value) => update({ league: value })} leagues={leagues} leagueError={leagueError} intent={equipmentPrice.intent}
+              loadoutContext={loadoutContext} onCompare={compareWithLoadout} onRecordQuote={loadoutContext ? recordLoadoutQuote : undefined}
+              autoEstimate={equipmentPrice.source === 'hotkey' || equipmentPrice.source === 'view'} onEstimate={equipmentPrice.source === 'hotkey' ? (summary) => { void publishCompanion(equipmentPrice.id, { ...summary, status: summary.status ?? 'ready' }, equipmentPrice.deliveryToken); } : undefined} />
               : engine && <TradePanel key={quickPrice ? quickPrice.id + ':' + (quickPrice.deliveryToken ?? '') : 'workbench-item'} data={engine.data} tradeData={tradeData} item={quickPrice?.item ?? item} targets={quickPrice ? [] : targets} baseName={quickPrice?.baseName ?? baseName} raw={quickPrice?.raw ?? session.raw} actualRollsInvalid={!quickPrice && session.actualRollsInvalid === true} league={league} onLeague={(value) => update({ league: value })} leagues={leagues} leagueError={leagueError} priceLeague={basis?.league} onAllT1={() => { openEquipmentPrice(quickPrice?.raw ?? session.raw, 'paste', 't1'); }} autoEstimate={quickPrice?.complete === true} onEstimate={quickPrice ? (summary) => { void publishCompanion(quickPrice.id, { ...summary, status: summary.status ?? 'ready' }, quickPrice.deliveryToken); } : undefined} />}
+            {!equipmentPrice && !quickPrice && craftQuote && <div className="wb-alert"><p>当前装备已记录挂牌参考：{craftQuote.amount} {CURRENCIES[craftQuote.currency]} · {new Date(craftQuote.at).toLocaleString('zh-CN')}。可作为出售价值的情景输入，不代表实际成交价或购买成本。</p>
+              {craftQuote.currency === 'exalted' ? <button className="wb-button" onClick={() => setProfitInputs((old) => ({ ...old, current: String(craftQuote.amount) }))}>引用到当前装备可售价值</button>
+                : <p className="wb-fine">本情景以 Ex 计价，请核对汇率后手动换算；不会自动混算币种。</p>}</div>}
             {!equipmentPrice && !quickPrice && <><div className="wb-divider" /><div className="wb-section-head"><h3>手动价格情景比较</h3><span>单位 Ex</span></div><p className="wb-description">查到可比挂单后填入参考价格，比较继续加工与直接出售。这里使用你填写的价格，不会自动推断成交价。</p><div className="wb-profit-inputs">{([['current', '当前装备可售价值'], ['quick', '成品保守价'], ['fair', '成品一般价'], ['optimistic', '成品乐观价']] as const).map(([key, label]) => <label key={key}>{label}<input aria-label={label} type="number" min="0" placeholder="待填写" value={profitInputs[key]} onChange={(event) => setProfitInputs((old) => ({ ...old, [key]: event.target.value }))} /></label>)}</div>
             {expectedCost !== null && !stale && markov?.bound === 'exact' && profitInputs.current !== '' ? <div className="wb-profit-results">{(['quick', 'fair', 'optimistic'] as const).map((key) => { const sale = profitInputs[key]; const profit = Number(sale) - Number(profitInputs.current) - expectedCost; const invested = Number(profitInputs.current) + expectedCost; return <div key={key}><small>{{ quick: '保守情景', fair: '一般情景', optimistic: '乐观情景' }[key]}</small><strong className={sale !== '' && profit >= 0 ? 'positive' : ''}>{sale === '' ? '待填写' : `${profit >= 0 ? '+' : ''}${formatCost(profit)} Ex`}</strong><span>{sale === '' || !invested ? '—' : `ROI ${formatPercent(profit / invested)}`}</span></div>; })}</div> : <p className="wb-fine">先获得当前目标的已收敛制作成本，并填写当前装备价值，才能比较价格情景。</p>}
             <p className="wb-fine">公式：成品参考价 − 当前装备机会成本 − 后续期望成本。此处未建模售出时间与市场价格分布，属于价格情景测算。</p></>}
@@ -563,14 +576,14 @@ export default function WorkbenchApp() {
           {tab === 'settings' && <section className="wb-panel"><div className="wb-section-head"><div><span className="wb-eyebrow">DATA & PRICING</span><h3>每个数字，都有来处。</h3></div><span className="wb-tag">本地价格覆盖</span></div><div className="wb-source-grid"><div><small>制作规则快照</small><strong>{engine?.data.patch ?? '—'}</strong><p>来自 POE2_HTC，普通词缀权重为 PoE2DB 社区数据。版本号不代表已自动匹配最新游戏补丁。</p></div><div><small>内置材料价格</small><strong>{basis?.asOf?.slice(0, 10) ?? '—'}</strong><p>{basis?.league ?? '—'} · poe.ninja 价格快照；部分材料可能包含估计值。</p></div></div>
             <div className="wb-advisor-verdict"><strong>游戏内快捷查价与步骤校验</strong><p>用 start-workbench.cmd 启动时会同时打开快捷键助手。鼠标停在游戏装备上，按 Alt + E 查价；执行通货后按 Ctrl + Alt + G 校验已锁定的制作锚点。请保持工坊网页打开，使用窗口化或无边框模式查看置顶结果。Esc 收起助手面板，托盘菜单可退出。也可单独运行 start-hotkeys.cmd。</p></div>
             <div className="wb-source-links"><a href="https://www.poe2wiki.net/wiki/List_of_modifiers_for_rings" target="_blank" rel="noreferrer">戒指 Wiki <Icon name="external" size={13} /></a><a href="https://www.poe2wiki.net/wiki/List_of_modifiers_for_amulets" target="_blank" rel="noreferrer">项链 Wiki <Icon name="external" size={13} /></a><a href="https://poe2db.tw/tw/Modifiers" target="_blank" rel="noreferrer">PoE2DB 词缀 <Icon name="external" size={13} /></a><a href="https://poe.ninja/poe2/economy" target="_blank" rel="noreferrer">材料市场 <Icon name="external" size={13} /></a></div>
-            <p className="wb-description">填写每单位材料折合多少崇高石（Ex），会同步影响制作策略与模拟成本。清空输入即可恢复内置价格；不会覆盖原始数据文件。</p>
+            <details className="wb-fold"><summary>自定义材料价格 · {Object.keys(overrides).length} 项覆盖</summary><p className="wb-description">填写每单位材料折合多少崇高石（Ex），会同步影响制作策略与模拟成本。清空输入即可恢复内置价格；不会覆盖原始数据文件。</p>
             <div className="wb-price-table"><div className="wb-price-head"><span>材料</span><span>内置价 / Ex</span><span>你的价格 / Ex</span></div>{engine && Object.keys(CURRENCY_LABELS).filter((key) => engine.prices.currency[key] !== undefined).map((key) => <div key={key}><label className="wb-price-material" htmlFor={`price-${key}`}><OfficialCurrencyIcon currencyId={key} label={CURRENCY_LABELS[key]!} />{CURRENCY_LABELS[key]}</label><span>{formatCost(engine.prices.currency[key]!)}</span><input id={`price-${key}`} type="number" min="0.000001" step="any" placeholder="使用内置价" value={overrides[key] ?? ''} onChange={(event) => { const value = Number(event.target.value); const next = { ...overrides }; if (!event.target.value) delete next[key]; else if (Number.isFinite(value) && value > 0) next[key] = value; update({ overrides: next }); }} /></div>)}</div>
             <div className="wb-actions"><button className="wb-button" onClick={() => update({ overrides: {} })} disabled={!Object.keys(overrides).length}>恢复全部内置价格</button></div>
-            <p className="wb-fine">保存范围：装备、目标、赛季、制作选项与价格覆盖保存在当前浏览器。模拟操作记录与价格情景仅保留在当前页面。</p>
+            </details><p className="wb-fine">保存范围：装备、目标、赛季、制作选项与价格覆盖保存在当前浏览器。模拟操作记录与价格情景仅保留在当前页面。</p>
           </section>}
         </main>
       </div>
-      <footer className="wb-footer"><span>POE2 CRAFT LAB <i /> 把每一步做明白。</span><span>个人本地版 · Milestone 1</span></footer>
+      <footer className="wb-footer"><span>POE2 CRAFT LAB <i /> 把每一步做明白。</span><span>个人本地工坊</span></footer>
     </div>
   </div>;
 }

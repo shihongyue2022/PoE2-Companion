@@ -27,7 +27,7 @@ try {
   await loadout.getByText('从 PoB2 导入整套装备', { exact: true }).click();
   await loadout.getByLabel('PoB2 分享代码或 XML', { exact: true }).fill(deflateSync(xml).toString('base64url'));
   await loadout.getByRole('button', { name: '预览 PoB2 装备', exact: true }).click();
-  await expect(loadout.getByText('左戒指：Dawn Loop', { exact: true })).toBeVisible();
+  await expect(loadout.getByText('左戒指：稀有紫晶戒指', { exact: true })).toBeVisible();
   assert.equal(await page.evaluate(() => localStorage.getItem('poe2-workbench-loadout-v1')), null);
   await loadout.getByRole('button', { name: '确认替换整套装备（1 件）', exact: true }).click();
   await expect(loadout.getByRole('button', { name: '左戒指：Dawn Loop', exact: true })).toBeVisible();
@@ -47,8 +47,9 @@ try {
   await trade.screenshot({ path: 'artifacts/workbench/igniferis-recognized.png' });
   console.log('PASS supplied Igniferis has six real searchable effects, separate lore and double corruption');
 
-  await nav().getByRole('button', { name: '交易与损益', exact: true }).click();
+  await nav().getByRole('button', { name: '交易追踪', exact: true }).click();
   const finance = page.getByRole('region', { name: '交易与资产损益', exact: true });
+  await finance.getByText('场次与手动记账', { exact: true }).click();
   await finance.getByRole('button', { name: '开始本场记录', exact: true }).click();
   async function entry(kind, label, amount, currency = 'exalted', confirmed = true) {
     await finance.getByLabel('收支类型', { exact: true }).selectOption(kind);
@@ -69,6 +70,7 @@ try {
   await expect(cash.getByText(/待确认 1 条，不计入报告/)).toBeVisible();
   console.log('PASS confirmed receipts 100 - 30 - 5 = 65 Ex; pending 9999 excluded and Divine separate');
 
+  await finance.getByText('持有资产估值涨跌 · 下线前后对比', { exact: true }).click();
   await finance.getByLabel('资产名称', { exact: true }).fill('测试持有戒指');
   await finance.getByLabel('新增资产数量', { exact: true }).fill('2');
   await finance.getByRole('button', { name: '添加持有资产', exact: true }).click();
@@ -81,7 +83,9 @@ try {
   await expect(finance.getByRole('row').filter({ has: page.getByRole('rowheader', { name: '测试持有戒指', exact: true }) }).last()).toContainText('-120');
   await finance.getByRole('button', { name: '结束本场 / 下线记账', exact: true }).click();
   await page.reload();
-  await nav().getByRole('button', { name: '交易与损益', exact: true }).click();
+  await nav().getByRole('button', { name: '交易追踪', exact: true }).click();
+  await finance.getByText('场次与手动记账', { exact: true }).click();
+  await finance.getByText('持有资产估值涨跌 · 下线前后对比', { exact: true }).click();
   await expect(finance.locator('.fn-result strong')).toHaveText('40 崇高石');
   await expect(finance.getByRole('button', { name: '结束本场 / 下线记账', exact: true })).toBeDisabled();
   await finance.screenshot({ path: 'artifacts/workbench/finance-separated.png' });
@@ -90,8 +94,9 @@ try {
   const peer = await page.context().newPage();
   peer.on('pageerror', (error) => errors.push(error.message));
   await peer.goto(base);
-  await peer.getByRole('navigation', { name: '工作区域' }).getByRole('button', { name: '交易与损益', exact: true }).click();
+  await peer.getByRole('navigation', { name: '工作区域' }).getByRole('button', { name: '交易追踪', exact: true }).click();
   const peerFinance = peer.getByRole('region', { name: '交易与资产损益', exact: true });
+  await peerFinance.getByText('场次与手动记账', { exact: true }).click();
   await peerFinance.getByRole('button', { name: '开始本场记录', exact: true }).click();
   await expect(finance.getByRole('button', { name: '开始本场记录', exact: true })).toBeDisabled();
   await peerFinance.getByLabel('收支类型', { exact: true }).selectOption('income');

@@ -3,6 +3,7 @@ import type { FlexibleTradeDocument } from './tradeSearch';
 import { localizeEquipmentName, localizeEquipmentProperty, localizeEquipmentStat, parseEquipment } from './genericEquipment';
 import { TradeMemoryActions } from './TradeMemoryActions';
 import { rememberTrade } from './tradeMemory';
+import { canonicalQuoteCurrency, type LoadoutQuote } from './loadoutQuotes';
 import {
   estimateCurrencyName, estimateNumber, estimateSummary, fetchMarketEstimate,
   type MarketEstimateResult,
@@ -17,6 +18,7 @@ export interface PriceEstimateProps {
   emptyMessage?: string;
   itemRaw?: string;
   memoryTitle?: string;
+  onRecordQuote?: (quote: Omit<LoadoutQuote, 'itemText'>) => void;
   onEstimate?: (summary: { message: string; detail: string; url: string; status?: 'ready' | 'error' }) => void;
 }
 
@@ -26,7 +28,7 @@ export function PriceEstimate(props: PriceEstimateProps) {
   return <PriceEstimateRequest key={key} {...props} />;
 }
 
-function PriceEstimateRequest({ query, url, league, auto = false, onEstimate, buttonLabel, emptyMessage, itemRaw, memoryTitle }: PriceEstimateProps) {
+function PriceEstimateRequest({ query, url, league, auto = false, onEstimate, buttonLabel, emptyMessage, itemRaw, memoryTitle, onRecordQuote }: PriceEstimateProps) {
   const [result, setResult] = useState<MarketEstimateResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -118,6 +120,13 @@ function PriceEstimateRequest({ query, url, league, auto = false, onEstimate, bu
         <strong>{estimateNumber(group.p25)}–{estimateNumber(group.p75)} {estimateCurrencyName(group.currency)}</strong>
         <p>低价样本中间 50% 区间 · {group.count} 个卖家</p>
         <p className="wb-muted">样本中位数 {estimateNumber(group.median)} · 最低 {estimateNumber(group.min)} · 最高 {estimateNumber(group.max)}</p>
+        {onRecordQuote && <button type="button" className="wb-button" disabled={!canonicalQuoteCurrency(group.currency) || result.context?.sufficient === false}
+          title={!canonicalQuoteCurrency(group.currency) ? '该计价通货尚未接入资产账本。' : result.context?.sufficient === false ? '当前查询条件过于宽泛，请先补齐可比属性再记录。' : '记录当前条件下这组挂牌样本的中位数，供角色装备与资产情景参考。'}
+          onClick={() => {
+            const currency = canonicalQuoteCurrency(group.currency); if (!currency) return;
+            onRecordQuote({ league, amount: group.median, currency, at: result.sampledAt, url: result.url,
+              conditions: `${result.context?.summary.join(' · ') ?? '当前勾选条件'} · ${group.count} 个卖家样本中位数 · ${result.confidence?.level === 'low' ? '低置信' : '仅为挂牌参考'}`.slice(0, 1000) });
+          }}>记录到角色装备估值（{estimateCurrencyName(group.currency)}）</button>}
       </div>)}
       {result.warnings.filter((warning) => !result.confidence?.reasons.includes(warning)).map((warning) => <p key={warning} className="wb-muted">{warning}</p>)}
       {!!result.listings?.length && <details className="wb-card">

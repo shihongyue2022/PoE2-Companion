@@ -1,5 +1,9 @@
-import { equipmentMetricDetails, parseEquipment, type Equipment } from './genericEquipment';
+import { equipmentMetricDetails, parseEquipment, simplifyEquipmentText, type Equipment } from './genericEquipment';
 import { projectCharacterResistances, validCharacterPanel, type CharacterPanelSnapshot } from './characterPanel';
+import { readPobSource, type PobSource, type PreviousLoadout } from './loadoutSource';
+import { readLoadoutQuotes, type LoadoutQuotes } from './loadoutQuotes';
+import { readBuildProfile, type BuildProfile } from './buildProfile';
+import { buildCandidateWarnings, buildConditionWarnings } from './buildAdvice';
 
 export const LOADOUT_STORAGE_KEY = 'poe2-workbench-loadout-v1';
 
@@ -37,6 +41,12 @@ export const METRICS = [
   { key: 'armour', label: '护甲', unit: '' },
   { key: 'evasion', label: '闪避', unit: '' },
   { key: 'energyShield', label: '能量护盾', unit: '' },
+  { key: 'lifeRegeneration', label: '每秒生命回复（固定值）', unit: '' },
+  { key: 'globalArmourPercent', label: '全域护甲增加', unit: '%' },
+  { key: 'globalEvasionPercent', label: '全域闪避增加', unit: '%' },
+  { key: 'globalEnergyShieldPercent', label: '全域能量护盾增加', unit: '%' },
+  { key: 'lifePercent', label: '最大生命增加', unit: '%' },
+  { key: 'manaPercent', label: '最大魔力增加', unit: '%' },
   { key: 'physicalDps', label: '武器物理 DPS', unit: '' },
   { key: 'elementalDps', label: '武器元素 DPS', unit: '' },
   { key: 'totalDps', label: '武器总攻击 DPS', unit: '' },
@@ -49,12 +59,16 @@ export const DEFAULT_PRIORITIES: MetricKey[] = ['life', 'fireResistance', 'coldR
 export interface LoadoutGoals {
   priorities: MetricKey[];
   minimums: Partial<Record<ResistanceKey, number>>;
+  build?: BuildProfile;
 }
 export interface LoadoutState {
   version: 1;
   slots: Partial<Record<LoadoutSlot, string>>;
   goals: LoadoutGoals;
   character?: CharacterPanelSnapshot;
+  source?: PobSource;
+  previous?: PreviousLoadout;
+  quotes?: LoadoutQuotes;
 }
 export function emptyLoadout(): LoadoutState {
   return { version: 1, slots: {}, goals: { priorities: [...DEFAULT_PRIORITIES], minimums: {} } };
@@ -107,6 +121,7 @@ export function removeSlot(state: LoadoutState, slot: LoadoutSlot): LoadoutState
 }
 export function loadoutWarnings(state: LoadoutState): string[] {
   const warnings: string[] = [];
+  warnings.push(...buildConditionWarnings(state.goals.build, state.slots));
   const main = parseEquipment(state.slots.mainHand ?? '');
   const off = parseEquipment(state.slots.offHand ?? '');
   if (off && !main) warnings.push('尚无主手，无法核对副手搭配。箭袋需要弓；双持限制与天赋例外请在游戏内核对。');
@@ -125,7 +140,7 @@ export function loadoutWarnings(state: LoadoutState): string[] {
   return warnings;
 }
 
-/** Weapon DPS, recovery, conditional modifiers and increased-percent modifiers are not set-wide sums. */
+/** Item contributions only; increased-percent bonuses remain separate metrics, never final sheet totals. */
 export function loadoutTotals(state: LoadoutState): Record<string, number> {
   const totals: Record<string, number> = {};
   for (const raw of Object.values(state.slots)) {
@@ -143,6 +158,7 @@ export function loadoutTotals(state: LoadoutState): Record<string, number> {
 
 export interface MetricDelta {
   key: MetricKey; label: string; unit: string; before: number; after: number; delta: number; priority: boolean;
+  beforeUnknown?: boolean; afterUnknown?: boolean;
 }
 export interface ResistanceTarget {
   key: ResistanceKey; label: string; minimum: number; before: number; after: number; met: boolean;
@@ -160,35 +176,44 @@ export interface EquipmentComparison {
   targets: ResistanceTarget[];
   warnings: string[];
   canEquip: boolean;
+  identical: boolean;
+  sameItemText: boolean;
+  notesBefore: string[]; notesAfter: string[];
 }
 const round = (value: number) => Math.round(value * 100) / 100;
 const sameLines = (a: string[], b: string[]) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
 
-export function compareCandidate(state: LoadoutState, slot: LoadoutSlot, candidate: Equipment): EquipmentComparison {
+export function compareCandidate(state: LoadoutState, slot: LoadoutSlot, candidate: Equipment,
+  context: { beforeFilledSockets?: number; afterFilledSockets?: number } = {}): EquipmentComparison {
   const current = parseEquipment(state.slots[slot] ?? '');
   const conflict = equipmentSlotError(slot, candidate, state);
-  const oldDetails = current ? equipmentMetricDetails(current) : { values: {}, uncounted: [] };
-  const newDetails = equipmentMetricDetails(candidate);
+  const oldDetails = current ? equipmentMetricDetails(current, { filledSockets: context.beforeFilledSockets }) : { values: {}, uncounted: [], pending: [], explanations: [] };
+  const newDetails = equipmentMetricDetails(candidate, { filledSockets: context.afterFilledSockets });
   const metrics = METRICS.map((metric) => ({ ...metric,
     before: round(oldDetails.values[metric.key] ?? 0), after: round(newDetails.values[metric.key] ?? 0),
     delta: round((newDetails.values[metric.key] ?? 0) - (oldDetails.values[metric.key] ?? 0)),
     priority: state.goals.priorities.includes(metric.key),
-  })).filter((metric) => metric.before !== 0 || metric.after !== 0 || metric.priority);
-  const characterResistances = projectCharacterResistances(state, slot, candidate);
+    beforeUnknown: oldDetails.pending.includes(metric.key), afterUnknown: newDetails.pending.includes(metric.key),
+  })).filter((metric) => metric.before !== 0 || metric.after !== 0 || metric.priority || metric.beforeUnknown || metric.afterUnknown);
+  const characterResistances = projectCharacterResistances(state, slot, candidate, context);
   const changed = metrics.map((metric) => {
     const projected = characterResistances.find((resistance) => resistance.key === metric.key);
     return projected ? { ...metric, delta: projected.effectiveDelta } : metric;
-  }).filter((metric) => metric.delta !== 0);
+  }).filter((metric) => !metric.beforeUnknown && !metric.afterUnknown && metric.delta !== 0);
   const priorityChanges = changed.filter((metric) => metric.priority);
   const positive = changed.some((metric) => metric.delta > 0);
   const negative = changed.some((metric) => metric.delta < 0);
   const priorityPositive = priorityChanges.some((metric) => metric.delta > 0);
   const priorityNegative = priorityChanges.some((metric) => metric.delta < 0);
-  const priorityDirection = !state.goals.priorities.length ? '未选择优先属性'
+  const priorityDirection = metrics.some((metric) => metric.priority && (metric.beforeUnknown || metric.afterUnknown)) ? '优先属性待确认插槽'
+    : !state.goals.priorities.length ? '未选择优先属性'
     : priorityPositive && priorityNegative ? '优先属性互有升降' : priorityPositive ? '优先属性提升'
       : priorityNegative ? '优先属性下降' : '优先属性持平';
   const warnings: string[] = [];
+  if (oldDetails.pending.length || newDetails.pending.length) warnings.push('每插槽效果需要确认实际镶嵌数量；待确认属性未按零收益比较。插槽 S 只表示孔位。');
+  if (metrics.some((metric) => metric.key.startsWith('global') && (metric.before || metric.after || metric.beforeUnknown || metric.afterUnknown))) warnings.push('全域防御增加与其他 increased 加成相加，未直接乘到装备防御或角色面板；实际收益取决于天赋、技能及其他装备。');
   if (characterResistances.length) warnings.push('角色抗性按已录入的未封顶总值与装备差值估算，其他天赋、技能及条件保持不变；生命和防御仍只比较装备贡献。');
+  warnings.push(...buildCandidateWarnings(state, slot, candidate));
   if (state.character && !validCharacterPanel(state)) warnings.push('装备已变化，游戏面板基准已失效，请重新录入当前面板后再判断有效抗性。');
   if (conflict) warnings.push(conflict);
   if (!current) warnings.push('当前栏位为空，没有旧装备可比较。');
@@ -197,13 +222,19 @@ export function compareCandidate(state: LoadoutState, slot: LoadoutSlot, candida
   if (changedEffects) warnings.push('未计入加总的词缀发生变化，技能、条件效果与流派收益需要单独核对。');
   const parserWarnings = [...(current?.warnings ?? []), ...candidate.warnings];
   warnings.push(...new Set(parserWarnings));
-  const insufficient = !current || !candidate.identified || !current.identified || !!conflict || changedEffects || parserWarnings.length > 0
+  const comparableText = (raw: string) => simplifyEquipmentText(raw).replace(/\r/g, '').split('\n').map((line) => line.trim()).filter((line) => line && !/^(?:Note|备注|备註)[:：]/i.test(line)).join('\n');
+  const sameItemText = !!current && current.identified && candidate.identified && !conflict && comparableText(current.raw) === comparableText(candidate.raw);
+  const identical = sameItemText
+    && (context.beforeFilledSockets ?? current.sockets?.filled) === (context.afterFilledSockets ?? candidate.sockets?.filled);
+  if (sameItemText && !identical) warnings.push('两件的物品文字相同，差异仅来自本次镶嵌数量设置。请先核对或补齐现有装备，不必据此购买另一件。');
+  const insufficient = !current || !candidate.identified || !current.identified || !!conflict || changedEffects || parserWarnings.length > 0 || oldDetails.pending.length > 0 || newDetails.pending.length > 0
     || !!state.character && !validCharacterPanel(state);
   let status: ComparisonStatus = insufficient ? 'insufficient' : positive && negative ? 'tradeoff' : positive ? 'upgrade' : negative ? 'downgrade' : 'equal';
+  if (identical && !conflict) status = 'equal';
   const beforeTotals = loadoutTotals(state);
   const targets = RESISTANCE_KEYS.flatMap((key): ResistanceTarget[] => {
     const minimum = state.goals.minimums[key];
-    if (minimum === undefined) return [];
+    if (minimum === undefined || oldDetails.pending.includes(key) || newDetails.pending.includes(key)) return [];
     const before = characterResistances.find((resistance) => resistance.key === key)?.before ?? beforeTotals[key] ?? 0;
     const after = round(before - (oldDetails.values[key] ?? 0) + (newDetails.values[key] ?? 0));
     return [{ key, label: METRICS.find((metric) => metric.key === key)!.label, minimum, before, after, met: after >= minimum }];
@@ -224,7 +255,9 @@ export function compareCandidate(state: LoadoutState, slot: LoadoutSlot, candida
       ? '已比较的装备贡献与封顶后的有效抗性未发生收益变化；抗性溢出的变化仍在下方列出。'
       : '按非抗性装备贡献与封顶后的有效抗性判断，溢出抗性不重复视为当前收益；生命与防御差值不代表角色最终变化。';
   }
-  return { status, title: titles[status], reason: reasons[status], priorityDirection, metrics, characterResistances,
+  return { status, identical, sameItemText, notesBefore: oldDetails.explanations, notesAfter: newDetails.explanations,
+    title: identical ? '装备文本相同，未发现升级差异' : titles[status],
+    reason: identical ? '当前与候选的复制文本及镶嵌比较条件相同，无需重复替换。未确认插槽和未建模效果仍需核对。' : reasons[status], priorityDirection, metrics, characterResistances,
     uncountedBefore: oldDetails.uncounted, uncountedAfter: newDetails.uncounted, targets, warnings, canEquip: !conflict };
 }
 
@@ -250,6 +283,7 @@ export function deserializeLoadout(text: string): { state: LoadoutState | null; 
   }
   if (data.goals && typeof data.goals === 'object') {
     const goals = data.goals as Record<string, unknown>;
+    const build = readBuildProfile(goals.build); if (build) state.goals.build = build;
     if (Array.isArray(goals.priorities)) state.goals.priorities = [...new Set(goals.priorities.filter((key): key is MetricKey => typeof key === 'string' && isMetricKey(key)))];
     if (goals.minimums && typeof goals.minimums === 'object') {
       const minimums = goals.minimums as Record<string, unknown>;
@@ -277,6 +311,13 @@ export function deserializeLoadout(text: string): { state: LoadoutState | null; 
       if (typeof cap === 'number' && Number.isFinite(cap) && cap >= 0 && cap <= 100) caps[key] = cap;
     }
     state.character = { values, caps, itemValues, equipmentSignature: panel.equipmentSignature, recordedAt: panel.recordedAt };
+  }
+  state.source = readPobSource(data.source);
+  const quotes = readLoadoutQuotes(data.quotes, state.slots);
+  if (Object.keys(quotes).length) state.quotes = quotes;
+  if (record(data.previous) && typeof data.previous.replacedAt === 'string' && Number.isFinite(Date.parse(data.previous.replacedAt))) {
+    const previous = deserializeLoadout(JSON.stringify({ version: 1, slots: data.previous.slots }));
+    if (previous.state) state.previous = { slots: previous.state.slots, source: readPobSource(data.previous.source), replacedAt: data.previous.replacedAt };
   }
   return { state, error: '' };
 }

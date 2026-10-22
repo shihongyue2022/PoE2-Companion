@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { indexPatch } from '../../packages/engine/src/indexPatch';
@@ -67,11 +67,18 @@ function candidate(container: HTMLElement, id = 'repair'): HTMLElement {
   return element as HTMLElement;
 }
 
+function renderAdvisor(element: React.ReactElement) {
+  const view = render(element);
+  const summary = view.container.querySelector('.wb-advisor > details.wb-fold > summary');
+  if (summary) fireEvent.click(summary);
+  return view;
+}
+
 describe('crafting advisor decisions on the actual imported ring', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('shows the level-79 ceiling and a level-82 replacement link without computing impossible T1 goals', () => {
-    const { container } = render(<CraftAdvisor {...props()} />);
+    const { container } = renderAdvisor(<CraftAdvisor {...props()} />);
     const cold = container.querySelector('[data-ceiling-id="Rings/ColdResistance"]') as HTMLElement;
     expect(within(cold).getByText('T3')).toBeInTheDocument();
     expect(within(cold).getByText('T2')).toBeInTheDocument();
@@ -91,7 +98,7 @@ describe('crafting advisor decisions on the actual imported ring', () => {
     const input = props();
     const result = exactResult();
     vi.mocked(computeWorkbench).mockReturnValue({ promise: Promise.resolve(result), cancel: vi.fn() });
-    const { container } = render(<CraftAdvisor {...input} />);
+    const { container } = renderAdvisor(<CraftAdvisor {...input} />);
     const repair = within(candidate(container));
     await user.type(screen.getByRole('spinbutton', { name: '追加材料预算' }), '100');
     await user.click(repair.getByRole('button', { name: '单独评估此方案' }));
@@ -127,7 +134,7 @@ describe('crafting advisor decisions on the actual imported ring', () => {
     const user = userEvent.setup();
     const job = deferredJob();
     vi.mocked(computeWorkbench).mockReturnValue(job);
-    const { container } = render(<CraftAdvisor {...props()} />);
+    const { container } = renderAdvisor(<CraftAdvisor {...props()} />);
     await user.click(within(candidate(container)).getByRole('button', { name: '单独评估此方案' }));
     expect(screen.getByRole('button', { name: '停止评估' })).toBeEnabled();
     await user.click(screen.getByRole('button', { name: '停止评估' }));
@@ -144,7 +151,7 @@ describe('crafting advisor decisions on the actual imported ring', () => {
     const input = props();
     const job = deferredJob();
     vi.mocked(computeWorkbench).mockReturnValue(job);
-    const { container, rerender } = render(<CraftAdvisor {...input} />);
+    const { container, rerender } = renderAdvisor(<CraftAdvisor {...input} />);
     await user.click(within(candidate(container)).getByRole('button', { name: '单独评估此方案' }));
     rerender(<CraftAdvisor {...input} item={{ ...item, level: 82 }} />);
     expect(job.cancel).toHaveBeenCalledTimes(1);
@@ -165,7 +172,7 @@ describe('crafting advisor decisions on the actual imported ring', () => {
         markov: { ...result.markov, applicable: false, feasible: false, expectedCost: Infinity },
       }), cancel: vi.fn(),
     });
-    const { container } = render(<CraftAdvisor {...props()} />);
+    const { container } = renderAdvisor(<CraftAdvisor {...props()} />);
     const repair = within(candidate(container));
     await user.click(repair.getByRole('button', { name: '单独评估此方案' }));
     expect(await repair.findByText('当前模型暂不支持此方案')).toBeVisible();
@@ -177,7 +184,7 @@ describe('crafting advisor decisions on the actual imported ring', () => {
 
   it('never starts a solver for an item blocked by its import restriction', async () => {
     const user = userEvent.setup();
-    const { container } = render(<CraftAdvisor {...props({ restriction: '装备已污染，不能继续制作。' })} />);
+    const { container } = renderAdvisor(<CraftAdvisor {...props({ restriction: '装备已污染，不能继续制作。' })} />);
     const evaluate = screen.getByRole('button', { name: '评估加工成本' });
     expect(evaluate).toBeDisabled();
     expect(container.querySelectorAll('.wb-advisor-candidate.blocked').length).toBeGreaterThan(0);

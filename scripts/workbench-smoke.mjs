@@ -13,6 +13,7 @@ const screenshotDir = 'artifacts/workbench';
 await mkdir(screenshotDir, { recursive: true });
 try {
   await page.goto(process.env.WORKBENCH_URL ?? 'http://127.0.0.1:5173', { waitUntil: 'networkidle' });
+  await page.getByRole('navigation', { name: '工作区域' }).getByRole('button', { name: '制作策略' }).click();
   await page.getByRole('button', { name: '载入目标示例' }).waitFor();
   await page.locator('.wb-pool-row').first().waitFor();
   assert.match(await page.title(), /制作工坊/);
@@ -34,7 +35,7 @@ try {
   check('real Web Worker solves an already-complete existing item at zero further cost');
 
   const nav = page.getByRole('navigation', { name: '工作区域' });
-  await nav.getByRole('button', { name: '自由模拟' }).click();
+  await page.getByRole('button', { name: '自由模拟' }).click();
   await page.locator('.wb-currency').filter({ has: page.locator('strong', { hasText: /^崇高石$/ }) }).click();
   assert.equal(await page.locator('.wb-current-mods .wb-mod').count(), 4);
   await page.getByRole('button', { name: '撤销', exact: true }).click();
@@ -54,6 +55,7 @@ try {
   assert(query.query.stats.reduce((count, group) => count + group.filters.length, 0) > 0);
   assert(await page.locator('.wb-trade-filter.enabled').count() <= 3);
   check('official trade URL uses selected stats without hidden base or item level restrictions');
+  await page.locator('.wb-trade-search > .wb-fold > summary').click();
   await page.getByRole('checkbox', { name: '限制物品等级' }).check();
   await page.getByLabel('交易最低物等').fill('0');
   await page.getByRole('heading', { name: '选核心属性，查相似装备。' }).waitFor();
@@ -69,9 +71,11 @@ try {
   while (await page.locator('.wb-targets .wb-mod').count() > 1) await page.locator('.wb-targets .wb-remove').last().click();
   await page.locator('.wb-targets select').first().selectOption('1');
   await page.getByLabel('搜索精度').selectOption('15000');
+  await page.getByText('通货范围与计算选项', { exact: true }).click();
   await page.getByRole('checkbox', { name: /同时抽样验证/ }).check();
   await page.getByRole('button', { name: '计算制作策略', exact: true }).click();
   await page.locator('.wb-results').waitFor({ timeout: 70_000 });
+  await page.getByText('抽样校验与材料消耗', { exact: true }).click();
   const nontrivial = await page.locator('.wb-results').innerText();
   assert.match(nontrivial, /后续期望成本/);
   const baselineCost = Number((await page.locator('.wb-results .wb-metrics>div').first().locator('strong').innerText()).replaceAll(',', ''));
@@ -90,7 +94,8 @@ try {
     localStorage.setItem('poe2-workbench-v1', JSON.stringify(session));
   }, doubled);
   await page.reload({ waitUntil: 'networkidle' });
-  await page.locator('.wb-pool-row').first().waitFor();
+  await nav.getByRole('button', { name: '制作策略' }).click();
+  await page.locator('.wb-pool-row').first().waitFor({ state: 'attached' });
   await page.getByRole('button', { name: '计算制作策略', exact: true }).click();
   await page.locator('.wb-results').waitFor({ timeout: 70_000 });
   const doubledCost = Number((await page.locator('.wb-results .wb-metrics>div').first().locator('strong').innerText()).replaceAll(',', ''));
@@ -104,7 +109,8 @@ try {
   await page.getByRole('button', { name: '识别并导入' }).click();
   assert(await page.getByRole('button', { name: '计算制作策略', exact: true }).isDisabled());
   await page.reload({ waitUntil: 'networkidle' });
-  await page.locator('.wb-pool-row').first().waitFor();
+  await nav.getByRole('button', { name: '制作策略' }).click();
+  await page.locator('.wb-pool-row').first().waitFor({ state: 'attached' });
   assert(await page.getByRole('button', { name: '计算制作策略', exact: true }).isDisabled());
   assert.equal(await page.getByRole('button', { name: '我已补齐并核对当前词缀' }).count(), 0);
   check('corruption restriction survives reload and cannot be cleared as a parsing warning');

@@ -135,6 +135,15 @@ export function toSimplified(text: string): string {
   return [...text].map((char) => SIMPLIFIED[char] ?? char).join('');
 }
 
+export function translatePobLabel(text: string): string {
+  const labels: Record<string, string> = {
+    Mercenary: '佣兵', 'Gemling Legionnaire': '古灵军团', Mercenary3: '古灵军团', Ranger: '游侠', Warrior: '战士',
+    Witch: '女巫', Sorceress: '女术士', Monk: '僧侣', Huntress: '女猎手',
+    None: '未选择升华', Default: '默认', Current: '当前',
+  };
+  return Object.prototype.hasOwnProperty.call(labels, text) ? labels[text]! : toSimplified(text);
+}
+
 interface LocalStat {
   readonly english: string;
   readonly traditional: readonly string[];

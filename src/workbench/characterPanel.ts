@@ -12,16 +12,16 @@ export const equipmentSignature = (slots: LoadoutState['slots']) => JSON.stringi
 export function validCharacterPanel(state: LoadoutState): boolean {
   return !!state.character && state.character.equipmentSignature === equipmentSignature(state.slots);
 }
-export function projectCharacterResistances(state: LoadoutState, slot: LoadoutSlot, candidate: Equipment) {
+export function projectCharacterResistances(state: LoadoutState, slot: LoadoutSlot, candidate: Equipment,
+  context: { beforeFilledSockets?: number; afterFilledSockets?: number } = {}) {
   if (!state.character || !validCharacterPanel(state)) return [];
   const old = state.slots[slot];
   if (!old) return [];
-  return projectResistanceValues(state.character, equipmentMetricDetailsFromRaw(old), equipmentMetricDetails(candidate).values);
+  const previous = parseEquipment(old); if (!previous) return [];
+  const before = equipmentMetricDetails(previous, { filledSockets: context.beforeFilledSockets });
+  const after = equipmentMetricDetails(candidate, { filledSockets: context.afterFilledSockets });
+  return projectResistanceValues(state.character, before.values, after.values).filter((row) => !before.pending.includes(row.key) && !after.pending.includes(row.key));
 }
-const equipmentMetricDetailsFromRaw = (raw: string) => {
-  const item = parseEquipment(raw);
-  return item ? equipmentMetricDetails(item).values : {};
-};
 export function projectResistanceValues(snapshot: CharacterPanelSnapshot, beforeItem: Record<string, number>, afterItem: Record<string, number>) {
   return (['fireResistance', 'coldResistance', 'lightningResistance', 'chaosResistance'] as const).flatMap((key) => {
     const before = snapshot.values[key];

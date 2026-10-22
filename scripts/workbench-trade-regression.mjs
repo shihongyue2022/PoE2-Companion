@@ -23,6 +23,7 @@ async function query() {
 }
 try {
   await page.goto(process.env.WORKBENCH_URL ?? 'http://127.0.0.1:5173', { waitUntil: 'networkidle' });
+  await page.getByRole('navigation', { name: '工作区域' }).getByRole('button', { name: '制作策略' }).click();
   await page.locator('.wb-pool-row').first().waitFor();
   await page.getByRole('button', { name: '粘贴游戏物品' }).click();
   await page.getByLabel('游戏物品文本').fill(raw);
@@ -36,6 +37,7 @@ try {
   const nav = page.getByRole('navigation', { name: '工作区域' });
   await nav.getByRole('button', { name: '官方查价' }).click();
   await searchLink().waitFor();
+  await page.locator('.wb-trade-search > .wb-fold > summary').click();
   let q = await query();
   assert.equal(q.type, undefined);
   assert.equal(q.filters.misc_filters, undefined);

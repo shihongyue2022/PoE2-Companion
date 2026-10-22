@@ -129,7 +129,7 @@ function AdvisorBody(props: AdvisorProps) {
     {assessment.constraints.length > 0 && <ul className="wb-advisor-reasons">{assessment.constraints.map((reason, index) => <li key={index}>{reason}</li>)}</ul>}
     {assessment.ceilings.length > 0 && <details className="wb-details wb-advisor-ceilings" open={assessment.status === 'limited'}><summary>查看已有词缀的提升上限</summary><div className="wb-advisor-ceiling-head"><span>词缀方向</span><span>当前</span><span>此装备最高</span></div>{assessment.ceilings.map((row) => <div className="wb-advisor-ceiling" key={row.modId} data-ceiling-id={row.modId}><div><strong>{row.label}</strong>{row.reason && <small>{row.reason}</small>}</div><span>T{row.currentTier}{row.fractured ? ' · 锁定' : ''}</span><span>{row.bestTier ? `T${row.bestTier}` : '待确认'}{row.topRequiredLevel && row.topRequiredLevel > item.level && <small>T1 需物等 {row.topRequiredLevel}</small>}</span></div>)}</details>}
     {replacementUrl && <a className="wb-text-button" href={replacementUrl} target="_blank" rel="noreferrer">查物等 {assessment.replacementLevel}+ 的同底座底材 ↗</a>}
-    {assessment.candidates.length > 0 && <>
+    {assessment.candidates.length > 0 && <details className="wb-fold"><summary>比较制作目标与重新购买底装 · {assessment.candidates.length} 个方案</summary>
       <div className="wb-advisor-budget"><label>愿意追加的材料预算<input aria-label="追加材料预算" type="number" min="0" step="any" placeholder="选填 · Ex" value={budgetText} onChange={(event) => setBudgetText(event.target.value)} /></label><label>当前装备可售参考价<input aria-label="建议当前装备可售参考价" type="number" min="0" step="any" placeholder="选填 · Ex" value={currentValueText} onChange={(event) => setCurrentValueText(event.target.value)} /></label></div>
       <div className="wb-advisor-toolbar"><button className="wb-button primary" disabled={props.mainSolving || restartBusy || (!busy && !eligible.length)} onClick={() => busy ? cancel() : void analyze()}>{busy ? '停止评估' : '评估加工成本'}</button><p>逐个比较可行方案，沿用下方制作方式、搜索精度和材料价格。预算用于比较期望消耗，单次做装可能超支。</p></div>
       {busy && <div className="wb-progress" role="status"><div><span>正在评估：{assessment.candidates.find((candidate) => candidate.id === active)?.title ?? '准备中'}</span><span>{Math.round((progress?.fraction ?? 0) * 100)}%</span></div><progress max={1} value={progress?.fraction ?? 0} /></div>}
@@ -163,7 +163,7 @@ function AdvisorBody(props: AdvisorProps) {
           {trade && trade.warnings.length > 0 && <p className="wb-fine">官网属性存在映射歧义，请进入交易页核对条件。</p>}
         </article>;
       })}</div>
-    </>}
+    </details>}
     <details className="wb-details"><summary>建议依据与适用范围</summary>{assessment.notes.map((note, index) => <p key={index}>{note}</p>)}<p>经济比较仅使用你填写的同目标成品价格和当前装备参考价。当前装备价值 + 后续材料成本超过成品价时，会建议优先比较直接购买；未计售出时间与交易差价。</p></details>
   </section>;
 }

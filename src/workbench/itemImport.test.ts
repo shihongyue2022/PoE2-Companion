@@ -9,6 +9,13 @@ import { BREACH_RING_SAMPLE } from './fixtures/breachRing';
 const data = loadPatch('data/patches/0.5.0');
 
 describe('Traditional Chinese jewellery import', () => {
+  it('keeps sanctified imported jewellery blocked from normal crafting in English and Chinese', () => {
+    for (const state of ['Sanctified', '已聖化', '已圣化']) {
+      const item = parseWorkbenchItem(data, `${EXAMPLE_RING}\n--------\n${state}`)!;
+      expect(item.craftingBlocked).toBe(true);
+      expect(item.blockedReason).toContain('已圣化');
+    }
+  });
   it('reads real advanced Breach Ring groups without losing desecration, fracture or rolled values', () => {
     const item = parseWorkbenchItem(data, BREACH_RING_SAMPLE)!;
     expect(item).toMatchObject({ baseNameEnglish: 'Breach Ring', level: 79, rarity: 'rare', unmatchedLines: [] });
