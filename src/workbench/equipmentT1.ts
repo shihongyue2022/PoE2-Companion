@@ -19,7 +19,7 @@ const allPoolIds = (base: ItemBase): string[] => [...new Set([
   ...base.pools.essence.prefixes, ...base.pools.essence.suffixes,
 ])];
 
-export function referenceFor(modifier: EquipmentMod, pool: readonly Mod[], data: PatchData, trade: GearTrade): EquipmentT1Reference {
+export function referenceFor(modifier: EquipmentMod, pool: readonly Mod[], data: PatchData, trade: GearTrade, allowedRunes: readonly string[] = []): EquipmentT1Reference {
   const placements = new Set(modifier.ids.map((id) => id.split('.')[0]));
   if (['implicit', 'enchant', 'rune'].some((origin) => placements.has(origin))) return { status: 'fixed', note: '固定／附魔／符文效果不按普通词缀评 T1；保留原属性条件。' };
   if (!modifier.searchable || !modifier.ref) return { status: 'unverified', note: '尚未识别为唯一的官方交易属性，不能确认 T1。' };
@@ -27,7 +27,7 @@ export function referenceFor(modifier: EquipmentMod, pool: readonly Mod[], data:
   const source = placements.has('desecrated') && !placements.has('explicit') && !placements.has('fractured') ? 'desecrated' : 'normal';
   const candidates: { min?: number; max?: number; roll?: { min: number; max: number }; tiers?: EquipmentT1Reference['tiers']; requiredLevel: number; fixed: boolean; family: string; source: string }[] = [];
   for (const mod of pool) {
-    if (mod.rune || modifier.affixType && mod.type !== modifier.affixType) continue;
+    if (mod.rune && !allowedRunes.includes(mod.rune) || modifier.affixType && mod.type !== modifier.affixType) continue;
     // Desecration can mark an ordinary mod too; prefer its special pool only when it actually matches.
     if (!['normal', ...(source === 'desecrated' ? ['desecrated'] : [])].includes(mod.source) || !mod.text) continue;
     const tier = mod.tiers.at(-1); if (!tier) continue;

@@ -34,6 +34,8 @@ import PresetNumberInput from './PresetNumberInput';
 import { activeWeaponSet, switchWeaponSet, weaponPair } from './weaponSets';
 import PobWeaponSync from './PobWeaponSync';
 import WeaponContributionPanel from './WeaponContributionPanel';
+import type { SkillAffixSearch } from './skillAffixGuide';
+import type { SkillInspection } from './SkillAffixGuidePanel';
 
 export interface LoadoutPanelProps {
   onPrice: (raw: string, intent?: 'price' | 'upgrade', slot?: LoadoutSlot) => void;
@@ -43,6 +45,7 @@ export interface LoadoutPanelProps {
   active?: boolean;
   recommendationData?: PatchData;
   recommendationTrade?: GearTrade | null;
+  onSkillSearch?: (request: SkillAffixSearch) => void;
 }
 const format = (value: number) => value.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
 const deltaText = (value: number, unit = '') => `${value > 0 ? '+' : ''}${format(value)}${unit}`;
@@ -71,7 +74,7 @@ function EquipmentArt({ item, kind }: { item: Equipment | null; kind: string }) 
     : <SlotGlyph kind={kind} />;
 }
 
-export default function LoadoutPanel({ onPrice, onCraft, league, candidate: incoming, active = true, recommendationData, recommendationTrade }: LoadoutPanelProps) {
+export default function LoadoutPanel({ onPrice, onCraft, league, candidate: incoming, active = true, recommendationData, recommendationTrade, onSkillSearch }: LoadoutPanelProps) {
   const saved = useSavedLoadout(), loadout = saved.state;
   const [selected, setSelected] = useState<LoadoutSlot>(() => {
     const item = parseEquipment(incoming?.raw ?? '');
@@ -84,6 +87,7 @@ export default function LoadoutPanel({ onPrice, onCraft, league, candidate: inco
   const [storageError, setStorageError] = useState('');
   const [socketCounts, setSocketCounts] = useState<{ before?: { raw: string; filled: number }; after?: { raw: string; filled: number }; scenario?: boolean }>({});
   const [backupText, setBackupText] = useState('');
+  const [skillInspection, setSkillInspection] = useState<SkillInspection>();
   const importEntry = useRef<HTMLDivElement>(null), directionEntry = useRef<HTMLDivElement>(null), calibrationEntry = useRef<HTMLDivElement>(null), comparisonEntry = useRef<HTMLDetailsElement>(null);
   const selectedItem = useMemo(() => parseEquipment(loadout.slots[selected] ?? ''), [loadout.slots, selected]);
   const candidate = useMemo(() => parseEquipment(candidateText), [candidateText]);
@@ -184,7 +188,7 @@ export default function LoadoutPanel({ onPrice, onCraft, league, candidate: inco
         <a href="https://www.pathofexile.com/developer/docs#getting-started" target="_blank" rel="noreferrer">查看 GGG 官方注册说明 ↗</a>
       </details>
     </section></div>
-    <div ref={directionEntry} className="lo-workflow-direction"><SkillRecommendationPanel state={loadout} onSave={save} /></div>
+    <div ref={directionEntry} className="lo-workflow-direction"><SkillRecommendationPanel state={loadout} onSave={save} onInspect={(selection, focusSupport) => setSkillInspection({ selection, focusSupport })} /></div>
     <PobResistanceSync active={active} />
     <PobWeaponSync active={active} />
     {currentResistances && <section className="lo-current-resistances" aria-label="当前整套抗性"><strong>当前整套抗性</strong>{currentResistances.rows.map((row) => <span key={row.key} className={row.met === false ? 'negative' : ''}>{row.label}：{row.effectiveAfter !== undefined ? `${format(row.effectiveAfter)}%` : row.after !== undefined ? `${format(row.after)}%（总值）` : '未知'} / {row.cap === undefined ? '上限未导出' : `${row.cap}%`}{row.overflowAfter !== undefined ? ` · 溢出 ${format(row.overflowAfter)}%` : ''}</span>)}<small>全元素不含混沌；已换装部分按累计差值推算。{loadout.socketEvidence?.some((entry) => entry.assumed) ? '镶嵌包含满孔情景，请核对实际数量。' : ''}</small>{currentResistances.rows.some((row) => row.cap === undefined) && <button type="button" className="wb-button" onClick={() => save({ ...loadout, goals: { ...loadout.goals, resistanceCaps: Object.fromEntries(RESISTANCE_KEYS.map((key) => [key, 75])) } })}>确认我的四项抗性上限均为 75%</button>}</section>}
@@ -210,7 +214,7 @@ export default function LoadoutPanel({ onPrice, onCraft, league, candidate: inco
         {warnings.length > 0 && <ul className="lo-warnings">{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
         <WeaponContributionPanel state={loadout} />
         <details className="lo-backup"><summary>角色来源与更新记录{loadout.lastImport?.equipmentChanges ? ` · ${loadout.lastImport.equipmentChanges} 栏变化` : ''}</summary><LoadoutSourcePanel state={loadout} /></details>
-        <CharacterAnalysisPanel state={loadout} onSave={save} onSelectSlot={selectSlot} />
+        <CharacterAnalysisPanel state={loadout} onSave={save} onSelectSlot={selectSlot} recommendationData={recommendationData} recommendationTrade={recommendationTrade} onSkillSearch={onSkillSearch} inspection={skillInspection} onInspectionChange={setSkillInspection} />
         <LoadoutQuoteSummary state={loadout} league={league ?? 'Forbidden Rites'} />
         <details className="lo-summary"><summary>装备贡献合计（非角色面板）</summary>
           <p className="lo-footnote">下列生命、护盾、护甲等属于装备贡献；角色最终面板请在下方录入，不能直接按同一数值比较。</p>

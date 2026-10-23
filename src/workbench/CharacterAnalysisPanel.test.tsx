@@ -15,7 +15,7 @@ it('shows localized gem links and damage breakdown, keeps saved zero FullDPS dis
   const gems = screen.getByRole('region', { name: '主技能与辅助宝石' });
   expect(within(gems).getByText('闪电长矛')).toBeVisible();
   expect(within(gems).getByText('元素武装 II')).toBeVisible();
-  expect(within(gems).getByText('技能 · 等级 18 · 品质 20%')).toBeVisible();
+  expect(within(gems).getByText('Lv.18 · 20%')).toBeVisible();
   const damage = screen.getByRole('region', { name: '技能伤害构成' });
   expect(within(damage).getByText('174.46')).toBeVisible();
   expect(within(damage).getByText(/不表示角色伤害为零/)).toBeVisible();

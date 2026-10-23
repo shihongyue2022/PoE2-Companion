@@ -18,16 +18,15 @@ import { explainCraftReason, presentMarkovResult } from './resultPresentation';
 import OfficialItemArt from './OfficialItemArt';
 import OfficialCurrencyIcon from './OfficialCurrencyIcon';
 import { getOfficialCurrencyImage, getCurrencyImageIdForAction } from './currencyImages';
-import TradePanel from './TradePanel';
 import EquipmentTradePanel from './EquipmentTradePanel';
 import TradeMemoryPanel from './TradeMemoryPanel';
 import LoadoutPanel from './LoadoutPanel';
 import { useSavedLoadout, writeSavedLoadout } from './loadoutStore';
 import { chooseComparisonSlot, type LoadoutContext } from './loadoutIntegration';
+import { resolveSkillAffixSearch, type SkillAffixSearch } from './skillAffixGuide';
 import type { UpgradeCandidateInput, UpgradeSearchSnapshot } from './upgradeWorkflow';
 import { slotLabel, type LoadoutSlot } from './loadout';
-import { currentLoadoutQuotes, type LoadoutQuote } from './loadoutQuotes';
-import { CURRENCIES } from './finance';
+import type { LoadoutQuote } from './loadoutQuotes';
 import FinancePanel from './FinancePanel';
 import { applyPobItemRepair } from './pobRepair';
 import { parseEquipment } from './genericEquipment';
@@ -149,9 +148,8 @@ export default function WorkbenchApp() {
   const [historyAt, setHistoryAt] = useState(0);
   const [showUnavailable, setShowUnavailable] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(!session.targets.length);
-  const [profitInputs, setProfitInputs] = useState({ current: '', quick: '', fair: '', optimistic: '' });
   const [quickPrice, setQuickPrice] = useState<{ id: string; deliveryToken?: string; raw: string; item: ExistingItem; baseName: string; warnings: readonly string[]; complete: boolean } | null>(null);
-  const [equipmentPrice, setEquipmentPrice] = useState<{ id: string; deliveryToken?: string; raw: string; source: 'hotkey' | 'paste' | 'loadout' | 'view'; intent: 'price' | 'upgrade' | 't1'; loadoutSlot?: LoadoutSlot } | null>(null);
+  const [equipmentPrice, setEquipmentPrice] = useState<{ id: string; deliveryToken?: string; raw: string; source: 'hotkey' | 'paste' | 'loadout' | 'view'; intent: 'price' | 'upgrade' | 't1'; loadoutSlot?: LoadoutSlot; skillSearch?: SkillAffixSearch } | null>(null);
   const runner = useRef<ReturnType<typeof computeWorkbench> | null>(null);
   const lastSignature = useRef('');
   const companionHandler = useRef<(packet: CompanionPacket) => void>(() => {});
@@ -225,7 +223,6 @@ export default function WorkbenchApp() {
   const markov = result?.markov;
   const resultView = markov ? presentMarkovResult(markov) : null;
   const currentNode = resultView?.hasCost ? markov?.nodes.find((node) => node.key === selectedNode) ?? markov?.nodes.find((node) => node.isStart) : undefined;
-  const expectedCost = resultView?.hasCost ? markov!.expectedCost : null;
   const simActions = useMemo(() => effectiveEngine ? getCraftActions(effectiveEngine, item) : [], [effectiveEngine, item]);
   const simSpent = simulation.slice(0, historyAt).reduce((sum, entry) => sum + entry.cost, 0);
   const simUnpriced = simulation.slice(0, historyAt).filter((entry) => !entry.priceKnown).length;
@@ -247,8 +244,13 @@ export default function WorkbenchApp() {
     setQuickPrice(null); setTab('trade'); setPasteOpen(false);
     return true;
   }
-  const loadoutContext: LoadoutContext | undefined = equipmentPrice?.loadoutSlot ? { state: savedLoadout.state, slot: equipmentPrice.loadoutSlot, raw: equipmentPrice.raw } : undefined;
-  const craftQuote = session.actualRollsInvalid ? undefined : currentLoadoutQuotes(savedLoadout.state, league).find(({ quote }) => quote.itemText === session.raw)?.quote;
+  const loadoutContext: LoadoutContext | undefined = equipmentPrice?.loadoutSlot ? { state: savedLoadout.state, slot: equipmentPrice.loadoutSlot, raw: equipmentPrice.skillSearch ? savedLoadout.state.slots[equipmentPrice.loadoutSlot] ?? '' : equipmentPrice.raw } : undefined;
+  function openSkillEquipmentSearch(request: SkillAffixSearch) {
+    const target = resolveSkillAffixSearch(savedLoadout.state, request, engine?.data, tradeData);
+    if (!target) { setNotice('技能或词池已变化，请返回技能增伤详情重新选择部位。'); return; }
+    setEquipmentPrice({ id: crypto.randomUUID(), raw: target.raw, source: 'loadout', intent: 'upgrade', loadoutSlot: request.slot, skillSearch: request });
+    setQuickPrice(null); setTab('trade'); setPasteOpen(false);
+  }
   function compareWithLoadout(equipment: ReturnType<typeof parseEquipment>, search?: UpgradeSearchSnapshot) {
     if (!equipment) return;
     const slot = chooseComparisonSlot(savedLoadout.state, equipment, equipmentPrice?.loadoutSlot);
@@ -508,7 +510,7 @@ export default function WorkbenchApp() {
           <div className="wb-attribution">基于 <a href="https://github.com/Dboire9/POE2_HTC" target="_blank" rel="noreferrer">POE2_HTC</a> · AGPL-3.0<br />词缀参考 PoE2DB / PoE2 Wiki<br />本工具为个人制作辅助，价格并非成交保证。</div>
         </aside>
         <main className="wb-main">
-          <div className="wb-loadout-host" hidden={tab !== 'gear'}><LoadoutPanel active={tab === 'gear'} recommendationData={engine?.data} recommendationTrade={tradeData} key={loadoutCandidate?.id ?? 'loadout'} candidate={loadoutCandidate} league={league} onPrice={(raw, intent, slot) => { openEquipmentPrice(raw, 'loadout', intent, undefined, slot); }} onCraft={(raw) => { setQuickPrice(null); setEquipmentPrice(null); setTab('plan'); importText(raw, 'new-craft'); }} /></div>
+          <div className="wb-loadout-host" hidden={tab !== 'gear'}><LoadoutPanel active={tab === 'gear'} recommendationData={engine?.data} recommendationTrade={tradeData} key={loadoutCandidate?.id ?? 'loadout'} candidate={loadoutCandidate} league={league} onSkillSearch={openSkillEquipmentSearch} onPrice={(raw, intent, slot) => { openEquipmentPrice(raw, 'loadout', intent, undefined, slot); }} onCraft={(raw) => { setQuickPrice(null); setEquipmentPrice(null); setTab('plan'); importText(raw, 'new-craft'); }} /></div>
           <div className="wb-finance-view" hidden={tab !== 'finance'}><FinancePanel league={league} active={tab === 'finance'} /></div>
           {tab === 'plan' && engine && <CraftCheckpointPanel item={item} baseName={baseName} targets={targets} mods={modById} anchor={session.checkpoint ?? null} review={session.checkpointReview ?? null} suggestedAction={currentNode?.action} onAnchor={(checkpoint) => update({ checkpoint, checkpointReview: null })} onCheckText={(raw) => { importText(raw, 'checkpoint'); }} onRecalculate={() => { if (!validation && !advisorBusy && !solving) void calculate(); else document.querySelector('.wb-compute')?.scrollIntoView({ behavior: 'smooth' }); }} />}
           {engine && <div hidden={tab !== 'plan'}><CraftAdvisor engine={engine} mods={modById} item={item} targets={targets} baseName={baseName} options={options} overrides={overrides} restriction={restriction} league={league} tradeData={tradeData} effort={effort} baseCost={session.baseCost} playOut={playOut} currentResult={stale ? null : result} mainSolving={solving} onBusyChange={setAdvisorBusy} onAdopt={adoptAdvice} /></div>}
@@ -560,10 +562,9 @@ export default function WorkbenchApp() {
             <div className="wb-section-head"><h3>操作记录</h3><span>仅保留当前会话</span></div>{simulation.length ? <div className="wb-history">{simulation.map((entry, index) => <div className={index >= historyAt ? 'undone' : ''} key={index}><b>{String(index + 1).padStart(2, '0')}</b><span>{translateCurrency(entry.label)}</span><small>{entry.priceKnown ? `${formatCost(entry.cost)} Ex` : '价格缺失'}</small></div>)}</div> : <div className="wb-empty-state"><Icon name="hammer" size={32} /><h3>从第一步开始试做</h3><p>上方会根据当前稀有度、槽位与物等启用可用通货。</p></div>}
           </section>}
           {tab === 'trade' && <section className="wb-panel">
-            <TradeMemoryPanel league={league} onOpenItem={(raw) => { openEquipmentPrice(raw, 'paste'); }} />
-            {(quickPrice || equipmentPrice) && <div className="wb-alert wb-companion-banner"><div><strong>{equipmentPrice?.source === 'loadout' ? '角色装备查价' : equipmentPrice?.source === 'paste' ? '全物品查价' : '快捷键查价装备'}</strong><p>此次查价独立于正在制作的装备。</p>{quickPrice?.warnings.map((warning, index) => <p key={index}>{warning}</p>)}</div><div className="wb-actions"><button className="wb-text-button" onClick={() => setTab('gear')}>回到角色装备</button><button className="wb-text-button" onClick={() => { setQuickPrice(null); setEquipmentPrice(null); }}>返回做装装备</button></div></div>}
+            <div className="wb-trade-route"><button className="wb-text-button" onClick={() => setTab('gear')}>← 角色装备</button><button className="wb-text-button" onClick={() => { setPasteDraft(''); setPasteOpen(true); }}>粘贴其他物品</button></div>
             {equipmentPrice ? <EquipmentTradePanel t1Data={engine?.data} t1Trade={tradeData} key={`${equipmentPrice.id}:${equipmentPrice.deliveryToken ?? ''}:${equipmentPrice.intent}:${equipmentPrice.intent === 'upgrade' ? JSON.stringify(savedLoadout.state.goals) : ''}`} raw={equipmentPrice.raw} league={league} onLeague={(value) => update({ league: value })} leagues={leagues} leagueError={leagueError} intent={equipmentPrice.intent}
-              loadoutContext={loadoutContext} onCompare={compareWithLoadout} onRecordQuote={loadoutContext ? recordLoadoutQuote : undefined}
+              loadoutContext={loadoutContext} skillSearch={equipmentPrice.skillSearch} onCompare={compareWithLoadout} onRecordQuote={loadoutContext ? recordLoadoutQuote : undefined}
               onRepairItem={loadoutContext ? (expectedRaw, repairedRaw) => {
                 const context = loadoutContext;
                 if (savedLoadout.error || context.raw !== expectedRaw || context.state.slots[context.slot] !== expectedRaw) throw new Error('来源装备已变化，请从角色装备页重新打开此栏搜索。');
@@ -574,13 +575,9 @@ export default function WorkbenchApp() {
                 setNotice('已从原始 PoB2 重新识别本栏装备。其他栏位、BD 目标和账本未更改；仍待核对的效果会继续保留提示。');
               } : undefined}
               autoEstimate={equipmentPrice.source === 'hotkey' || equipmentPrice.source === 'view'} onEstimate={equipmentPrice.source === 'hotkey' ? (summary) => { void publishCompanion(equipmentPrice.id, { ...summary, status: summary.status ?? 'ready' }, equipmentPrice.deliveryToken); } : undefined} />
-              : engine && <TradePanel key={quickPrice ? quickPrice.id + ':' + (quickPrice.deliveryToken ?? '') : 'workbench-item'} data={engine.data} tradeData={tradeData} item={quickPrice?.item ?? item} targets={quickPrice ? [] : targets} baseName={quickPrice?.baseName ?? baseName} raw={quickPrice?.raw ?? session.raw} actualRollsInvalid={!quickPrice && session.actualRollsInvalid === true} league={league} onLeague={(value) => update({ league: value })} leagues={leagues} leagueError={leagueError} priceLeague={basis?.league} onAllT1={() => { openEquipmentPrice(quickPrice?.raw ?? session.raw, 'paste', 't1'); }} autoEstimate={quickPrice?.complete === true} onEstimate={quickPrice ? (summary) => { void publishCompanion(quickPrice.id, { ...summary, status: summary.status ?? 'ready' }, quickPrice.deliveryToken); } : undefined} />}
-            {!equipmentPrice && !quickPrice && craftQuote && <div className="wb-alert"><p>当前装备已记录挂牌参考：{craftQuote.amount} {CURRENCIES[craftQuote.currency]} · {new Date(craftQuote.at).toLocaleString('zh-CN')}。可作为出售价值的情景输入，不代表实际成交价或购买成本。</p>
-              {craftQuote.currency === 'exalted' ? <button className="wb-button" onClick={() => setProfitInputs((old) => ({ ...old, current: String(craftQuote.amount) }))}>引用到当前装备可售价值</button>
-                : <p className="wb-fine">本情景以 Ex 计价，请核对汇率后手动换算；不会自动混算币种。</p>}</div>}
-            {!equipmentPrice && !quickPrice && <details className="wb-fold"><summary>实际报价与利润情景（可选／高级）</summary><div className="wb-section-head"><h3>价格情景比较</h3><span>单位 Ex</span></div><p className="wb-description">有已核对的实际挂牌参考时再比较继续加工与直接出售。不填写这些价格也可以计算制作策略。</p><div className="wb-profit-inputs">{([['current', '当前装备可售价值'], ['quick', '成品保守价'], ['fair', '成品一般价'], ['optimistic', '成品乐观价']] as const).map(([key, label]) => <label key={key}>{label}<input aria-label={label} type="number" min="0" placeholder="待填写" value={profitInputs[key]} onChange={(event) => setProfitInputs((old) => ({ ...old, [key]: event.target.value }))} /></label>)}</div>
-            {expectedCost !== null && !stale && markov?.bound === 'exact' && profitInputs.current !== '' ? <div className="wb-profit-results">{(['quick', 'fair', 'optimistic'] as const).map((key) => { const sale = profitInputs[key]; const profit = Number(sale) - Number(profitInputs.current) - expectedCost; const invested = Number(profitInputs.current) + expectedCost; return <div key={key}><small>{{ quick: '保守情景', fair: '一般情景', optimistic: '乐观情景' }[key]}</small><strong className={sale !== '' && profit >= 0 ? 'positive' : ''}>{sale === '' ? '待填写' : `${profit >= 0 ? '+' : ''}${formatCost(profit)} Ex`}</strong><span>{sale === '' || !invested ? '—' : `ROI ${formatPercent(profit / invested)}`}</span></div>; })}</div> : <p className="wb-fine">先获得当前目标的已收敛制作成本，并填写当前装备价值，才能比较价格情景。</p>}
-            <p className="wb-fine">公式：成品参考价 − 当前装备机会成本 − 后续期望成本。此处未建模售出时间与市场价格分布，属于价格情景测算。</p></details>}
+              : !quickPrice && session.actualRollsInvalid ? <p className="wb-inline-warning">当前物品经过模拟，需粘贴游戏中的实际装备再检索。</p>
+              : <EquipmentTradePanel key={quickPrice?.id ?? session.raw} raw={quickPrice?.raw ?? session.raw} t1Data={engine?.data} t1Trade={tradeData} league={league} onLeague={(value) => update({ league: value })} leagues={leagues} leagueError={leagueError} onCompare={compareWithLoadout} autoEstimate={quickPrice?.complete === true} onEstimate={quickPrice ? (summary) => { void publishCompanion(quickPrice.id, { ...summary, status: summary.status ?? 'ready' }, quickPrice.deliveryToken); } : undefined} />}
+            <TradeMemoryPanel league={league} onOpenItem={(raw) => { openEquipmentPrice(raw, 'paste'); }} />
           </section>}
           {tab === 'settings' && <section className="wb-panel"><div className="wb-section-head"><div><span className="wb-eyebrow">DATA & PRICING</span><h3>每个数字，都有来处。</h3></div><span className="wb-tag">本地价格覆盖</span></div><div className="wb-source-grid"><div><small>制作规则快照</small><strong>{engine?.data.patch ?? '—'}</strong><p>来自 POE2_HTC，普通词缀权重为 PoE2DB 社区数据。版本号不代表已自动匹配最新游戏补丁。</p></div><div><small>内置材料价格</small><strong>{basis?.asOf?.slice(0, 10) ?? '—'}</strong><p>{basis?.league ?? '—'} · poe.ninja 价格快照；部分材料可能包含估计值。</p></div></div>
             <div className="wb-advisor-verdict"><strong>游戏内快捷查价与步骤校验</strong><p>用 start-workbench.cmd 启动时会同时打开快捷键助手。鼠标停在游戏装备上，按 Alt + E 查价；执行通货后按 Ctrl + Alt + G 校验已锁定的制作锚点。请保持工坊网页打开，使用窗口化或无边框模式查看置顶结果。Esc 收起助手面板，托盘菜单可退出。也可单独运行 start-hotkeys.cmd。</p></div>

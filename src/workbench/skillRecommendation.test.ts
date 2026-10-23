@@ -22,7 +22,8 @@ describe('BD and main output skill recommendations', () => {
     const state = damageState(), plan = skillPlan(state)!;
     expect(plan).toMatchObject({ name: 'Lightning Spear', label: '闪电长矛', weapon: 'Spear', crit: true });
     expect(plan.notes.join(' ')).toContain('80%');
-    expect(classifySkillMod(plan, matchEquipmentStat('30% increased Physical Damage'), { slot: 'ring' })).toMatchObject({ weight: 4 });
+    expect(classifySkillMod(plan, matchEquipmentStat('30% increased Physical Damage'), { slot: 'ring' })).toMatchObject({ weight: 1 });
+    expect(classifySkillMod(plan, { ref: '#% increased Physical Damage', statId: 'local_physical_damage_+%' }, { slot: 'weapon' })).toMatchObject({ weight: 4 });
     expect(classifySkillMod(plan, matchEquipmentStat('30% increased Melee Damage'), { slot: 'ring' }).weight).toBe(0);
     expect(classifySkillMod(plan, matchEquipmentStat('30% increased Spell Damage'), { slot: 'ring' }).weight).toBe(0);
     expect(classifySkillMod(plan, matchEquipmentStat('Adds 10 to 20 Lightning Damage to Attacks'), { slot: 'ring' }).weight).toBeGreaterThan(classifySkillMod(plan, matchEquipmentStat('Adds 10 to 20 Fire Damage to Attacks'), { slot: 'ring' }).weight);

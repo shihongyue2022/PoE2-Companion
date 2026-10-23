@@ -37,3 +37,31 @@
 .wb-core-price .lo-table-scroll { overflow-x: auto; max-width: 100%; }
 .wb-core-price .lo-deltas { min-width: 460px; }
 .wb-core-price .wb-section-head { flex-wrap: wrap; }
+.wb-equipment-core-search { min-width: 0; }
+.wb-equipment-core-search h3 { margin: 0; }
+.wb-equipment-core-search p { margin: 4px 0; }
+.wb-equipment-core-search>.wb-section-head { flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.wb-equipment-core-search .wb-form-label { margin: 0; display: grid; gap: 4px; font-size: 10px; }
+.wb-core-item { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 8px 0; }
+.wb-core-item-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.wb-core-item-title>div { min-width: 0; overflow-wrap: anywhere; }
+.wb-core-item img { width: 32px; height: 44px; object-fit: contain; }
+.wb-core-budget { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.wb-core-budget .wb-number-preset { width: 160px; min-width: 0; }
+.wb-core-budget select { max-width: 100%; }
+.wb-core-resistance { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 11px; padding: 9px 12px; border: 1px solid var(--wb-line); border-radius: 5px; margin: 10px 0; }
+.wb-core-resistance>p { flex-basis: 100%; margin: 0; }
+.wb-core-resistance-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-basis: 100%; min-width: 0; }
+.wb-core-resistance-mode select { max-width: 100%; min-width: 0; font-size: 11px; padding: 5px 8px; }
+.wb-core-candidate-review { min-width: 200px; white-space: normal; }
+.wb-core-extra-filters,.wb-core-unfiltered { margin: 10px 0; font-size: 11px; }
+.wb-trade-route { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.wb-core-axis-list { border: 0; padding: 0; margin: 12px 0; display: grid; gap: 7px; min-width: 0; }
+.wb-core-axis-list legend { color: var(--wb-green); margin-bottom: 7px; font-size: 11px; }
+.wb-core-axis { display: grid; grid-template-columns: minmax(0,1fr) 155px 34px 34px; align-items: center; gap: 7px; min-width: 0; }
+.wb-core-axis select { padding: 7px 9px; font-size: 12px; height: 36px; }
+.wb-core-axis .wb-icon-button { width: 34px; height: 34px; padding: 6px; }
+.wb-core-axis-sort[aria-pressed=true] { color: var(--wb-green); background: #a9bd6920; border-color: #6e7b48; }
+.wb-core-axis-add { display: inline-flex; align-items: center; gap: 5px; justify-self: start; font-size: 11px; }
+.wb-core-conditions { font-size: 11px; line-height: 1.8; margin: 5px 0 8px; overflow-wrap: anywhere; }
+@media(max-width:520px) { .wb-core-axis { grid-template-columns: minmax(0,1fr) 30px 30px; gap: 5px; } .wb-core-axis-property { grid-column: 1/-1; } .wb-core-axis .wb-icon-button { width: 30px; height: 30px; } }

@@ -45,6 +45,17 @@ it('retains confirmed filled sockets across adoption and reload without granting
   expect(resistanceBaseline(restored).values.chaosResistance).toBe(40);
   expect(resistanceGate(restored, 'boots', parseEquipment(nextBoots)!).rows.find((row) => row.key === 'chaosResistance')).toMatchObject({ after: 60, met: false });
 });
+it('allows a second slot to complete the whole-loadout target after the first replacement loses chaos resistance', () => {
+  const first = equipRaw(state(), 'body', nextBody); if (!first.ok) throw new Error(first.error);
+  expect(resistanceGate(first.state, 'body', parseEquipment(nextBody)!).status).toBe('unmet');
+  const combinedBoots = nextBoots.replace('+20% to Chaos Resistance', '+35% to Chaos Resistance');
+  const combined = resistanceGate(first.state, 'boots', parseEquipment(combinedBoots)!);
+  expect(combined.status).toBe('met');
+  expect(combined.rows.find((row) => row.key === 'chaosResistance')).toMatchObject({ before: 40, after: 75, met: true });
+  const second = equipRaw(first.state, 'boots', combinedBoots); if (!second.ok) throw new Error(second.error);
+  const restored = deserializeLoadout(serializeLoadout(second.state)).state!;
+  expect(resistanceBaseline(restored).values).toMatchObject({ chaosResistance: 75, fireResistance: 135, coldResistance: 193, lightningResistance: 145 });
+});
 it('accepts explicitly confirmed caps for an unsaturated effective value but does not invent saturated overflow', () => {
   const current = state(); current.source!.reference = { values: {}, caps: {}, effective: { fireResistance: 75, chaosResistance: 57 } };
   current.goals.resistanceCaps = { fireResistance: 75, coldResistance: 75, lightningResistance: 75, chaosResistance: 75 };

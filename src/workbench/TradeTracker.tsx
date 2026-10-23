@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CURRENCIES, collectTrades, confirmTrade, isCurrency, trackerReport, validTradeCandidate, type Currency, type FinanceState, ENTRY_LABELS } from './finance';
+import { CURRENCIES, collectTrades, confirmTrade, correctTradeDirection, isCurrency, trackerReport, validTradeCandidate, type Currency, type FinanceState, ENTRY_LABELS } from './finance';
 import { parseTradeMessage, type TradeCandidate, type TradeLogSummary } from './tradeTracking';
 import Icon, { IconButton } from './WorkbenchIcon';
 import OfficialCurrencyIcon from './OfficialCurrencyIcon';
@@ -34,9 +34,14 @@ function PendingTrade({ trade, onConfirm, onIgnore, disabled }: { trade: TradeCa
 export default function TradeTracker({ state, league, save, onError, onManual, active = true }: {
   state: FinanceState; league: string; save: (next: FinanceState, message?: string) => boolean; onError: (message: string) => void; onManual: () => void; active?: boolean;
 }) {
-  const [currency, setCurrency] = useState<Currency>('exalted'), [days, setDays] = useState(30), [search, setSearch] = useState('');
+  const [currency, setCurrency] = useState<Currency>(() => {
+    const currencies = trackerReport(state, league, 'exalted', 30).currencies;
+    return currencies.find((row) => row.currency === 'exalted')?.currency ?? [...currencies].sort((a, b) => b.count - a.count)[0]?.currency ?? 'exalted';
+  }), [days, setDays] = useState(30), [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false), [status, setStatus] = useState('尚未读取游戏日志'), [paste, setPaste] = useState(''), [showPaste, setShowPaste] = useState(false);
   const [showImport, setShowImport] = useState(false), [summary, setSummary] = useState<TradeLogSummary>(), [attempted, setAttempted] = useState(false);
+  const [inboxFilter, setInboxFilter] = useState<'all' | 'purchase' | 'sale'>('all');
+  const inboxPanel = useRef<HTMLDetailsElement>(null);
   const inflight = useRef(false), mounted = useRef(false), firstRead = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const latest = useRef({ state, save });
@@ -72,9 +77,13 @@ export default function TradeTracker({ state, league, save, onError, onManual, a
   }, [state.tradeEnabled, refresh]);
   const report = trackerReport(state, league, currency, days, search);
   const inbox = (state.tradeInbox ?? []).filter((row) => !row.league || row.league === league);
+  const shownInbox = inbox.filter((row) => inboxFilter === 'all' || row.kind === inboxFilter);
+  const official = state.officialHistory?.[league];
+  const hasOfficial = !!official || state.entries.some((row) => row.trade?.sourceId.startsWith('official-') && state.sessions.some((session) => session.id === row.sessionId && session.league === league));
   const other = (state.tradeInbox?.length ?? 0) - inbox.length;
   const otherLeagues = [...new Set((state.tradeInbox ?? []).filter((row) => row.league && row.league !== league).map((row) => row.league!))];
   const allConfirmed = state.entries.filter((entry) => entry.confirmed && state.sessions.some((session) => session.id === entry.sessionId && session.league === league)).length;
+  function reviewPurchases() { setInboxFilter('purchase'); if (inboxPanel.current) { inboxPanel.current.open = true; inboxPanel.current.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); } }
   function exportCsv() {
     const cell = (value: string | number) => `"${String(value).replace(/^[=+@-]/, "'$&").replace(/"/g, '""')}"`;
     const rows = [['时间', '物品', '玩家', '类型', '数量', '通货', '联盟', '物品数量', '来源交易ID'], ...report.rows.map((row) => [row.at, row.label, row.trade?.player ?? '', ENTRY_LABELS[row.kind], row.amount, CURRENCIES[row.currency], league, row.trade?.quantity ?? 1, row.trade?.sourceId ?? `entry-${row.id}`])];
@@ -83,9 +92,23 @@ export default function TradeTracker({ state, league, save, onError, onManual, a
   }
   return <section className="tt-dashboard" aria-label="交易追踪器">
     <div className="tt-heading"><div><h2>交易追踪器</h2><p>{league} · 收入与支出</p></div><div className="tt-filters"><CurrencySelect label="交易统计通货" value={currency} onChange={setCurrency} /><select aria-label="交易统计时间" value={days} onChange={(event) => setDays(Number(event.target.value))}><option value={1}>今天</option><option value={7}>最近 7 天</option><option value={30}>最近 30 天</option><option value={0}>全部时间</option></select></div></div>
-    <OfficialHistoryPanel league={league} state={state} save={save} active={active} />
+    <OfficialHistoryPanel league={league} state={state} save={save} active={active} onSynced={(next) => {
+      // Reveal the freshly synchronized ledger even when an old currency/time
+      // or text filter would otherwise hide every imported record.
+      const visible = trackerReport(next, league, currency, days, search);
+      if (!visible.rows.length) {
+        const all = trackerReport(next, league, currency, 0);
+        const available = [...all.currencies].sort((a, b) => b.count - a.count);
+        if (available.length) { setSearch(''); setDays(0); setCurrency(available.find((row) => row.currency === currency)?.currency ?? available[0]!.currency); }
+      }
+    }} />
     <details className="tt-diagnostics"><summary>其他交易来源 · 密语线索与 CSV</summary><div className="tt-sources" aria-label="交易数据来源"><div><strong>密语交易 · {summary?.found ? '日志已连接' : summary ? '日志未找到' : busy ? '正在检查日志' : attempted ? '日志读取失败' : '尚未检查日志'}</strong><small>首次打开读取最近 30 天；开启自动读取后每 10 秒检查。识别报价后仍需确认实际成交。</small></div><div><strong>已有交易账本</strong><small>可导入其他工具导出的成交 CSV，与官网记录分来源去重；跨来源重复仍需核对。</small><button type="button" className="wb-text-button" onClick={() => setShowImport(true)}>导入已有成交 CSV</button></div></div></details>
-    <div className="tt-cards">{([['总收入', report.income, 'positive'], ['总支出', report.expense, 'negative'], ['净收支', report.net, report.net >= 0 ? 'positive' : 'negative']] as const).map(([label, value, color]) => <div className="tt-card" key={label}><span>{label}</span><strong className={color}>{format(value)}</strong><Unit value={currency} /></div>)}</div>
+    <div className="tt-cards">
+      <div className="tt-card"><span>已记录收入</span><strong className="positive">{format(report.income)}</strong><Unit value={currency} /></div>
+      <div className="tt-card"><span>已记录支出</span><strong className={report.expenseCount ? 'negative' : 'tt-unknown'}>{report.expenseCount ? format(report.expense) : '未记录'}</strong><Unit value={currency} /><small>{report.expenseCount ? `${report.expenseCount} 笔已确认支出` : '没有可计入的已确认支出，不表示实际花费为 0'}</small>{report.pendingPurchases.length > 0 && <button type="button" className="wb-text-button" onClick={reviewPurchases}>核对 {report.pendingPurchases.length} 笔买入线索 →</button>}</div>
+      <div className="tt-card"><span>已记录差额</span><strong className={report.expenseCount ? report.net >= 0 ? 'positive' : 'negative' : 'tt-unknown'}>{report.expenseCount ? format(report.net) : '待补支出'}</strong><Unit value={currency} /><small>{report.expenseCount ? '仅为已确认账目的收入减支出，不是完整利润' : '支出记录缺失，暂不将卖出收入当作利润'}</small></div>
+    </div>
+    <p className="tt-coverage wb-fine" role="status">{hasOfficial ? official?.purchases ? `官网本次返回 ${official.purchases} 笔显式买入，覆盖范围仍不完整。` : '官网同步未读取到买入，尚未覆盖游戏市集买入支出。' : '买入密语只作为报价线索，确认实际成交后才计入支出。'}收支按当前通货／时间／搜索条件统计；其他币种分别列在下方。</p>
     <div className="tt-toolbar"><label className="tt-search"><Icon name="search" size={17} /><input aria-label="搜索交易记录" placeholder="搜索物品或玩家" value={search} onChange={(event) => setSearch(event.target.value)} /></label><label className="tt-enable"><input type="checkbox" checked={Boolean(state.tradeEnabled)} onChange={(event) => save({ ...state, tradeEnabled: event.target.checked })} />自动读取交易线索</label>
       <IconButton icon="refresh" label="读取最近 30 天日志" disabled={busy} onClick={() => { void refresh(true); }} /><IconButton icon="paste" label="粘贴交易密语" aria-expanded={showPaste} onClick={() => setShowPaste(!showPaste)} /><IconButton icon="ledger" label="导入成交 CSV" aria-expanded={showImport} onClick={() => setShowImport(!showImport)} /><IconButton icon="plus" label="手动添加收支" onClick={onManual} /><IconButton icon="download" label="导出当前筛选交易 CSV" disabled={!report.rows.length} onClick={exportCsv} />
     </div>
@@ -98,24 +121,29 @@ export default function TradeTracker({ state, league, save, onError, onManual, a
         setShowImport(false); return true;
       } catch (failure) { onError(failure instanceof Error ? failure.message : '导入失败。'); return false; }
     }} />}
-    {report.currencies.length > 0 && <div className="tt-currency-summary" aria-label="各通货收支">{report.currencies.map((row) => <button type="button" key={row.currency} aria-pressed={currency === row.currency} onClick={() => setCurrency(row.currency)}>{CURRENCIES[row.currency]} · {row.count} 笔 · 净额 {format(row.net)}</button>)}</div>}
+    {report.currencies.length > 0 && <div className="tt-currency-summary" aria-label="各通货收支">{report.currencies.map((row) => <button type="button" key={row.currency} aria-pressed={currency === row.currency} onClick={() => setCurrency(row.currency)}>{CURRENCIES[row.currency]} · {row.count} 笔 · 已记收入 {format(row.income)} · {row.expenseCount ? `已记支出 ${format(row.expense)} · 账本差额 ${format(row.net)}` : '支出未记录'}</button>)}</div>}
     {!report.rows.length && allConfirmed > 0 && <p className="wb-fine">本联盟已有 {allConfirmed} 笔确认记录，当前通货、时间或搜索条件没有匹配结果。<button type="button" className="wb-text-button" onClick={() => { setDays(0); setSearch(''); const entry = state.entries.find((row) => row.confirmed && state.sessions.some((session) => session.id === row.sessionId && session.league === league)); if (entry) setCurrency(entry.currency); }}>显示已有记录</button></p>}
     {showPaste && <div className="tt-paste"><textarea aria-label="交易密语文字" maxLength={16000} value={paste} onChange={(event) => setPaste(event.target.value)} rows={3} placeholder="粘贴官方交易密语；带 @來自 / @From 可识别出售方向。" /><button type="button" className="wb-button" disabled={!paste.trim()} onClick={() => {
       const candidate = parseTradeMessage(paste, { id: `paste-${crypto.randomUUID()}`, source: 'paste' });
       if (!candidate) { onError('未识别到官方买卖密语，请保留物品、报价、通货和联盟。'); return; }
       if (save(collectTrades(state, [candidate]), '已加入待确认，请核对实际成交金额。')) { setPaste(''); setShowPaste(false); }
     }}>识别交易</button></div>}
-    <details className="tt-inbox" open={inbox.length > 0}><summary>待确认交易 <span className="wb-count">{inbox.length}</span>{other > 0 && <small> · 另有 {other} 条属于其他联盟</small>}</summary><p className="wb-fine">密语是报价线索，不代表已经成交。按实际交付核对后确认；自动读取只在工坊网页打开时运行。</p>
+    <details className="tt-inbox" ref={inboxPanel} open={inbox.length > 0}><summary>待确认交易 <span className="wb-count">{inbox.length}</span>{other > 0 && <small> · 另有 {other} 条属于其他联盟</small>}</summary><p className="wb-fine">密语是报价线索，不代表已经成交。按实际交付核对后确认；自动读取只在工坊网页打开时运行。</p>
+      <div className="wb-actions" role="group" aria-label="待确认交易方向">{([['all', '全部'], ['purchase', '买入支出'], ['sale', '卖出收入']] as const).map(([kind, label]) => <button type="button" className="wb-button" key={kind} aria-pressed={inboxFilter === kind} onClick={() => setInboxFilter(kind)}>{label}</button>)}</div>
       {otherLeagues.length > 0 && <p className="wb-fine">其他联盟：{otherLeagues.join('、')}。请切换顶部联盟后处理，记录没有丢失。</p>}
-      {inbox.map((row) => <PendingTrade key={row.id} trade={row} disabled={busy} onConfirm={(actual) => { try { save(confirmTrade(state, row, league, actual), '已计入成交记录。'); } catch (reason) { onError(reason instanceof Error ? reason.message : '未能确认。'); } }} onIgnore={() => save({ ...state, tradeInbox: state.tradeInbox?.filter((entry) => entry.id !== row.id), ignoredTradeIds: [...state.ignoredTradeIds ?? [], row.id] })} />)}
+      {shownInbox.map((row) => <PendingTrade key={row.id} trade={row} disabled={busy} onConfirm={(actual) => { try { save(confirmTrade(state, row, league, actual), '已计入成交记录。'); } catch (reason) { onError(reason instanceof Error ? reason.message : '未能确认。'); } }} onIgnore={() => save({ ...state, tradeInbox: state.tradeInbox?.filter((entry) => entry.id !== row.id), ignoredTradeIds: [...state.ignoredTradeIds ?? [], row.id] })} />)}
+      {!!inbox.length && !shownInbox.length && <p className="tt-empty">当前方向没有待确认线索。</p>}
       {!inbox.length && <p className="tt-empty">暂无待确认交易。开启自动读取，或粘贴官方交易密语。</p>}
     </details>
     <div className="tt-records"><div className="tt-record-heading"><h3>交易记录</h3><span>{report.rows.length} 笔 · {CURRENCIES[currency]}</span></div>
       {report.groups.map(([day, entries], index) => { const income = entries.filter((row) => row.kind === 'sale' || row.kind === 'income').reduce((n, row) => n + row.amount, 0); const expense = entries.filter((row) => row.kind === 'purchase' || row.kind === 'craft').reduce((n, row) => n + row.amount, 0);
-        return <details className="tt-day" key={day} open={index === 0}><summary><strong>{day}</strong><span>{entries.length} 笔</span><span className="positive">+{format(income)}</span><span className="negative">−{format(expense)}</span><b>净额 {format(income - expense)}</b></summary>
-          <div className="fn-scroll"><table><thead><tr><th>物品 / 项目</th><th>玩家</th><th>类型</th><th>金额</th><th>时间</th><th>操作</th></tr></thead><tbody>{entries.map((row) => <tr key={row.id}><td>{row.trade && row.trade.quantity > 1 ? `${row.trade.quantity} × ` : ''}{row.label}</td><td>{row.trade?.player || '—'}</td><td>{ENTRY_LABELS[row.kind]}</td><td className={row.kind === 'sale' || row.kind === 'income' ? 'positive' : 'negative'}>{row.kind === 'sale' || row.kind === 'income' ? '+' : '−'}{format(row.amount)}</td><td>{new Date(row.at).toLocaleTimeString('zh-CN')}</td><td><IconButton icon="undo" label={`撤回${row.label}成交确认`} onClick={() => save({ ...state, entries: state.entries.map((entry) => entry.id === row.id ? { ...entry, confirmed: false } : entry) }, '已撤回确认，可在场次记账中重新确认。')} /></td></tr>)}</tbody></table></div></details>;
+        return <details className="tt-day" key={day} open={index === 0}><summary><strong>{day}</strong><span>{entries.length} 笔</span><span className="positive">+{format(income)}</span><span className="negative">−{format(expense)}</span><b>已记差额 {format(income - expense)}</b></summary>
+          <div className="fn-scroll"><table><thead><tr><th>物品 / 项目</th><th>玩家</th><th>类型</th><th>金额</th><th>时间</th><th>操作</th></tr></thead><tbody>{entries.map((row) => <tr key={row.id}><td>{row.trade && row.trade.quantity > 1 ? `${row.trade.quantity} × ` : ''}{row.label}</td><td>{row.trade?.player || '—'}</td><td>{row.kind === 'sale' || row.kind === 'purchase' ? <select aria-label={`更正${row.label}成交方向`} title="更正这笔成交方向" value={row.kind} onChange={(event) => {
+            const kind = event.target.value; if (kind !== 'sale' && kind !== 'purchase') return;
+            try { save(correctTradeDirection(state, row.id, kind), '已更正成交方向，收支已重新统计。'); } catch (reason) { onError(reason instanceof Error ? reason.message : '方向未能更正。'); }
+          }}><option value="sale">出售收入</option><option value="purchase">购买支出</option></select> : ENTRY_LABELS[row.kind]}</td><td className={row.kind === 'sale' || row.kind === 'income' ? 'positive' : 'negative'}>{row.kind === 'sale' || row.kind === 'income' ? '+' : '−'}{format(row.amount)}</td><td>{new Date(row.at).toLocaleTimeString('zh-CN')}</td><td><IconButton icon="undo" label={`撤回${row.label}成交确认`} onClick={() => save({ ...state, entries: state.entries.map((entry) => entry.id === row.id ? { ...entry, confirmed: false } : entry) }, '已撤回确认，可在场次记账中重新确认。')} /></td></tr>)}</tbody></table></div></details>;
       })}
       {!report.rows.length && <div className="tt-empty"><Icon name="ledger" size={32} /><p>当前筛选下还没有已确认记录。</p><small>先确认一笔交易，或展开下方手动记账。</small></div>}
-    </div><p className="wb-fine">按所选通货统计，不跨币种相加。净收支为已确认收入减支出；持有资产的价格涨跌在下方独立查看。</p>
+    </div><p className="wb-fine">按所选通货统计已确认账目，不跨币种相加。账本差额不代表完整利润；持有资产的价格涨跌在下方独立查看。</p>
   </section>;
 }

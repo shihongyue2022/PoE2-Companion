@@ -12,6 +12,8 @@ export interface EquipmentTradeRow {
   referenceOnly?: boolean;
   locked?: boolean;
   scoringRef?: string;
+  skillFamily?: string;
+  requiredRune?: string;
   referenceScale?: number;
   suggested?: boolean;
   recommendation?: string;
@@ -21,6 +23,7 @@ export interface EquipmentTradeRow {
   targetTiers?: EquipmentT1Reference['tiers'];
   affixType?: 'prefix' | 'suffix';
   affixFamily?: string;
+  searchPresets?: { id: string; label: string; min?: number; max?: number }[];
 }
 export type EquipmentTradePreset = 'similar' | 'strict' | 'base' | 'upgrade';
 const format = (value: number): string => String(Math.round(value * 100) / 100);

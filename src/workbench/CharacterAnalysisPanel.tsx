@@ -8,19 +8,23 @@ import { localizeEquipmentName } from './genericEquipment';
 import Icon from './WorkbenchIcon';
 import './characterAnalysis.css';
 import { activeSecondWeapons } from './weaponSets';
+import SkillAffixGuidePanel, { type SkillInspection } from './SkillAffixGuidePanel';
+import type { SkillAffixSearch } from './skillAffixGuide';
+import type { PatchData } from '../../packages/engine/src/types';
+import type { GearTrade } from '../lib/gearTrade';
+import SkillGemButton from './SkillGemButton';
 
 const format = (value: number) => value.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
 const tagLabels: Record<string, string> = { attack: '攻击', spell: '法术', projectile: '投射物', melee: '近战', lightning: '闪电', fire: '火焰', cold: '冰冷', physical: '物理', chaos: '混沌', minion: '召唤物', area: '范围' };
-function GemBadge({ gem, inactive = false }: { gem: PobGem; inactive?: boolean }) {
+function GemBadge({ gem, inactive = false, onInspect }: { gem: PobGem; inactive?: boolean; onInspect: () => void }) {
   const info = gemInfo(gem);
-  return <span className={`ca-gem${info.support ? ' support' : ''}${inactive ? ' inactive' : ''}`} title={`${gem.name}\n${gem.id || gem.skillId}`}>
-    <b>{info.label}</b><small>{info.support ? '辅助' : '技能'} · 等级 {gem.level}{gem.quality ? ` · 品质 ${gem.quality}%` : ''}{inactive ? ' · 未启用' : ''}</small>
-  </span>;
+  return <SkillGemButton name={info.name} label={info.label} support={info.support} inactive={inactive} detail={`Lv.${gem.level}${gem.quality ? ` · ${gem.quality}%` : ''}`}
+    ariaLabel={`查看${info.label}${info.support ? '辅助机制' : '增伤词缀'}`} onClick={onInspect} />;
 }
-function Group({ group, secondWeapons }: { group: PobSkillGroup; secondWeapons: boolean }) {
+function Group({ group, secondWeapons, onInspect }: { group: PobSkillGroup; secondWeapons: boolean; onInspect: (gem: PobGem) => void }) {
   const enabled = activeGems(group, secondWeapons);
   return <div className="ca-group"><span className="lo-footnote">#{group.index} · {group.source === 'item' ? '装备赋予' : group.source === 'tree' ? '天赋赋予' : '宝石配置'}{group.fullDps ? ' · 纳入全技能汇总' : ''}</span>
-    <div className="ca-gems">{group.gems.map((gem, index) => <GemBadge key={index} gem={gem} inactive={!enabled.includes(gem)} />)}</div>
+    <div className="ca-gems">{group.gems.map((gem, index) => <GemBadge key={index} gem={gem} inactive={!enabled.includes(gem)} onInspect={() => onInspect(gem)} />)}</div>
   </div>;
 }
 function Damage({ combat, current }: { combat: PobCombat; current: boolean }) {
@@ -43,9 +47,23 @@ function Damage({ combat, current }: { combat: PobCombat; current: boolean }) {
   </section>;
 }
 
-export default function CharacterAnalysisPanel({ state, onSave, onSelectSlot }: { state: LoadoutState; onSave: (state: LoadoutState) => boolean; onSelectSlot: (slot: LoadoutSlot) => void }) {
+export default function CharacterAnalysisPanel({ state, onSave, onSelectSlot, recommendationData, recommendationTrade, onSkillSearch, inspection: requestedInspection, onInspectionChange }: {
+  state: LoadoutState; onSave: (state: LoadoutState) => boolean; onSelectSlot: (slot: LoadoutSlot) => void;
+  recommendationData?: PatchData; recommendationTrade?: GearTrade | null; onSkillSearch?: (request: SkillAffixSearch) => void;
+  inspection?: SkillInspection; onInspectionChange?: (inspection: SkillInspection | undefined) => void;
+}) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [metricKey, setMetricKey] = useState('energyShield'), [viewSet, setViewSet] = useState('');
+  const [localInspection, setLocalInspection] = useState<SkillInspection>();
+  const inspection = onInspectionChange ? requestedInspection : localInspection;
+  const mainSelection = state.goals.mainSkill;
+  const effectiveInspection = inspection && mainSelection?.source === 'pob' && inspection.selection.source === 'pob'
+    && mainSelection.setId === inspection.selection.setId && mainSelection.group === inspection.selection.group
+    && mainSelection.id === inspection.selection.id && mainSelection.name === inspection.selection.name ? { ...inspection, selection: mainSelection } : inspection;
+  const setInspection = onInspectionChange ?? setLocalInspection;
+  const guideRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => { if (inspection) { if (panelRef.current) panelRef.current.open = true; guideRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); } }, [inspection]);
   const latest = useRef(state);
   useEffect(() => { latest.current = state; }, [state]);
   const source = state.source, combat = source?.combat, gem = combat && mainGem(combat);
@@ -56,6 +74,14 @@ export default function CharacterAnalysisPanel({ state, onSave, onSelectSlot }: 
   const metric = metrics.find((entry) => entry.key === metricKey) ?? metrics[0];
   const contributions = metric ? rows.filter((row) => row.values[metric.key] !== undefined && row.values[metric.key] !== 0) : [];
   const maximum = metric ? Math.max(1, ...contributions.map((row) => Math.abs(row.values[metric.key]!))) : 1;
+  function inspect(group: PobSkillGroup, clicked: PobGem) {
+    const info = gemInfo(clicked), skill = info.support ? group.gems.filter((entry) => !gemInfo(entry).support)[group.mainActive - 1] : clicked;
+    if (!skill || !selectedSet) return;
+    const existing = state.goals.mainSkill;
+    setInspection({ selection: { source: 'pob', setId: selectedSet.id, group: group.index, id: skill.id || skill.skillId, name: skill.name,
+      ...(existing?.source === 'pob' && existing.setId === selectedSet.id && existing.group === group.index && existing.id === (skill.id || skill.skillId) && existing.name === skill.name ? { links: existing.links } : {}) },
+      ...(info.support ? { focusSupport: { name: info.name, label: info.label } } : {}) });
+  }
   async function read(xml?: string) {
     if (!source || busy) return;
     setBusy(true); setError(''); setNotice('');
@@ -67,7 +93,7 @@ export default function CharacterAnalysisPanel({ state, onSave, onSelectSlot }: 
     } catch (reason) { setError(reason instanceof Error ? reason.message : '读取失败，请选择原 XML 文件。'); }
     finally { setBusy(false); }
   }
-  return <details className="lo-summary ca-panel"><summary><Icon name="chart" size={17} />技能与构成{gem ? ` · ${gemInfo(gem).label}` : ''}</summary>
+  return <details ref={panelRef} className="lo-summary ca-panel"><summary><Icon name="chart" size={17} />技能与构成{gem ? ` · ${gemInfo(gem).label}` : ''}</summary>
     {source ? <div className="lo-actions"><button type="button" className="wb-button" disabled={busy || !source.fileName} onClick={() => { void read(); }}>{busy ? '正在补读…' : '补读原 PoB2 的技能与伤害'}</button>
       <label className="wb-button ca-file">选择原 XML<input type="file" accept=".xml" disabled={busy} aria-label="补读技能与伤害 XML" onChange={(event) => {
         const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
@@ -75,16 +101,17 @@ export default function CharacterAnalysisPanel({ state, onSave, onSelectSlot }: 
         void file.text().then((xml) => read(xml)).catch(() => setError('无法读取 XML 文件。'));
       }} /></label></div> : <p className="lo-footnote">先从上方整套导入 PoB2，即可读取主技能、辅助宝石和保存时伤害。</p>}
     {error && <p className="lo-alert" role="alert">{error}</p>}{notice && <p role="status" className="lo-notice">{notice}</p>}
+    {effectiveInspection && <div ref={guideRef}><SkillAffixGuidePanel key={JSON.stringify(effectiveInspection)} state={state} inspection={effectiveInspection} data={recommendationData} trade={recommendationTrade} onSave={onSave} onSearch={onSkillSearch} onClose={() => setInspection(undefined)} /></div>}
     {combat ? <>
       <p className="lo-footnote">{current ? '装备与 PoB2 保存快照对应' : '装备或武器组与伤害快照不同，请更新 PoB2；以下保留原方案参考'} · 技能与伤害取自最近读取的 XML。</p>
       {mainGroup && <section aria-label="主技能与辅助宝石"><h4>主技能 · {gem ? gemInfo(gem).label : `第 ${combat.mainGroup} 组`}</h4>
         {gem && <p className="lo-footnote">{gemInfo(gem).tags.map((tag) => tagLabels[tag] ?? tag).join(' · ')}</p>}
-        <Group group={mainGroup} secondWeapons={activeSecondWeapons(state)} /></section>}
+        <p className="lo-footnote">点击技能或辅助，查看增伤词缀、可出现部位并进入装备检索。</p><Group group={mainGroup} secondWeapons={activeSecondWeapons(state)} onInspect={(gem) => inspect(mainGroup, gem)} /></section>}
       <Damage combat={combat} current={current} />
       <details><summary>全部技能配置 · {selectedSet?.groups.length ?? 0} 组</summary>
         {combat.sets.length > 1 && <select aria-label="查看技能组方案" value={selectedSet?.id} onChange={(event) => setViewSet(event.target.value)}>{combat.sets.map((set, index) => <option key={set.id} value={set.id}>技能方案 {index + 1}{set.id === combat.activeSet ? '（保存时启用）' : ''}</option>)}</select>}
         <p className="lo-footnote">灰色为未启用或另一套武器专属。查看其他技能组不会重新计算伤害；上方伤害始终对应保存时主技能。</p>
-        {selectedSet?.groups.map((group) => <Group key={group.index} group={group} secondWeapons={activeSecondWeapons(state)} />)}
+        {selectedSet?.groups.map((group) => <Group key={group.index} group={group} secondWeapons={activeSecondWeapons(state)} onInspect={(gem) => inspect(group, gem)} />)}
       </details>
     </> : source && <p className="lo-footnote">这条旧记录尚未包含技能资料，请点击补读；无需重新输入装备。</p>}
     <section aria-label="装备构成"><h4>装备构成 · {rows.length} 件</h4>

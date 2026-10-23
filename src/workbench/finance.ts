@@ -63,7 +63,9 @@ export function readFinance(input: string): FinanceState {
   const state = value as unknown as FinanceState;
   if (value.officialHistory !== undefined && (!object(value.officialHistory) || Object.keys(value.officialHistory).length > 100 || !Object.entries(value.officialHistory).every(([league, report]) =>
     string(league) && object(report) && date(report.fetchedAt) && ['count', 'skipped', 'missingIds', 'unknownCurrencies', 'sales', 'purchases'].every((key) => Number.isSafeInteger(report[key]) && (report[key] as number) >= 0 && (report[key] as number) <= 1000) &&
-    (report.firstAt === undefined || date(report.firstAt)) && (report.lastAt === undefined || date(report.lastAt)) && (report.hasMore === undefined || typeof report.hasMore === 'boolean')))) throw new Error('官方成交同步范围不正确。');
+    (report.firstAt === undefined || date(report.firstAt)) && (report.lastAt === undefined || date(report.lastAt)) && (report.hasMore === undefined || typeof report.hasMore === 'boolean') &&
+    (report.unavailableItems === undefined || Number.isSafeInteger(report.unavailableItems) && (report.unavailableItems as number) >= 0 && (report.unavailableItems as number) <= 1000) &&
+    (report.skipReasons === undefined || object(report.skipReasons) && Object.entries(report.skipReasons).every(([key, count]) => ['format', 'status', 'direction', 'time', 'price', 'item', 'quantity', 'league'].includes(key) && Number.isSafeInteger(count) && (count as number) >= 0 && (count as number) <= 1000))))) throw new Error('官方成交同步范围不正确。');
   if (state.tradeEnabled !== undefined && typeof state.tradeEnabled !== 'boolean') throw new Error('追踪设置不正确。');
   if (state.ignoredTradeIds !== undefined && (!Array.isArray(state.ignoredTradeIds) || state.ignoredTradeIds.length > 20000 || !state.ignoredTradeIds.every(string))) throw new Error('忽略记录不正确。');
   if (state.tradeInbox !== undefined && (!Array.isArray(state.tradeInbox) || state.tradeInbox.length > 500 || !state.tradeInbox.every(validTradeCandidate) || !uniqueIds(state.tradeInbox))) throw new Error('待确认交易不正确。');
@@ -123,13 +125,26 @@ export function trackerReport(state: FinanceState, league: string, currency: Cur
     if (!entries.length) return [];
     const income = entries.filter((row) => row.kind === 'sale' || row.kind === 'income').reduce((sum, row) => sum + row.amount, 0);
     const expense = entries.filter((row) => row.kind === 'purchase' || row.kind === 'craft').reduce((sum, row) => sum + row.amount, 0);
-    return [{ currency: unit, count: entries.length, income, expense, net: income - expense }];
+    return [{ currency: unit, count: entries.length, income, expense, expenseCount: entries.filter((row) => row.kind === 'purchase' || row.kind === 'craft').length, net: income - expense }];
   });
   const income = rows.filter((row) => row.kind === 'sale' || row.kind === 'income').reduce((sum, row) => sum + row.amount, 0);
   const expense = rows.filter((row) => row.kind === 'purchase' || row.kind === 'craft').reduce((sum, row) => sum + row.amount, 0);
   const groups = new Map<string, LedgerEntry[]>();
   for (const row of rows) { const key = new Date(row.at).toLocaleDateString('zh-CN'); groups.set(key, [...groups.get(key) ?? [], row]); }
-  return { rows, income, expense, net: income - expense, groups: [...groups.entries()], currencies };
+  const expenseCount = rows.filter((row) => row.kind === 'purchase' || row.kind === 'craft').length;
+  const pendingPurchases = (state.tradeInbox ?? []).filter((row) => row.kind === 'purchase' && (!row.league || row.league === league)
+    && (row.currency === currency || row.currency === null) && Date.parse(row.at) >= start && Date.parse(row.at) <= now
+    && `${row.item} ${row.player}`.toLowerCase().includes(search.toLowerCase()));
+  // A merchant-history sync and a whisper-log scan are partial sources. Zero
+  // recorded purchases is not evidence of zero account spending.
+  return { rows, income, expense, expenseCount, pendingPurchases, net: income - expense, groups: [...groups.entries()], currencies };
+}
+export function correctTradeDirection(state: FinanceState, id: string, kind: 'sale' | 'purchase'): FinanceState {
+  const entry = state.entries.find((row) => row.id === id);
+  if (!entry || !entry.confirmed || !['sale', 'purchase'].includes(entry.kind) || !['sale', 'purchase'].includes(kind)) throw new Error('只能更正已确认买卖记录的方向。');
+  // Keep the original source ID so future syncs cannot reimport the transaction
+  // or undo the user's correction. Amount and currency remain the same facts.
+  return { ...state, entries: state.entries.map((row) => row.id === id ? { ...row, kind } : row) };
 }
 export function addLoadoutAssets(state: FinanceState, league: string, inputs: readonly { itemKey: string; label: string; quantity: number; price: number | null; currency: Currency }[], refreshPrices = false) {
   const existing = new Set(state.assets.filter((asset) => asset.league === league && asset.source?.kind === 'loadout').map((asset) => asset.source!.itemKey));

@@ -28,6 +28,9 @@
 .tt-card { display: flex; flex-direction: column; gap: 10px; padding: 23px; border: 1px solid #39412c; background: linear-gradient(125deg,#21281b,#141c11); border-radius: 10px; }
 .tt-card > span:first-child { color: #b6bf99; font-size: 14px; }
 .tt-card strong { font-size: clamp(26px,3.3vw,44px); font-weight: 500; line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tt-card .tt-unknown { font-size: clamp(20px,2.6vw,32px); color: #c8bb97; }
+.tt-card small { color: #a9b396; font-size: 11px; line-height: 1.6; }
+.tt-coverage { padding: 9px 12px; border-left: 2px solid #7d714b; background: #b9a65c0c; }
 .tt-unit { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #c5cdaa; }
 .tt-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .wb-finance .tt-search { flex: 1; min-width: 190px; display: flex; flex-direction: row; align-items: center; gap: 8px; border: 1px solid #414b31; border-radius: 6px; padding-left: 12px; }

@@ -26,6 +26,8 @@ import { addResistanceAffixRows, affixRowGroups, availableAffixes, describeAffix
 import AffixStructurePanel from './AffixStructurePanel';
 import AffixPriceStudy from './AffixPriceStudy';
 import CorePriceEstimate from './CorePriceEstimate';
+import EquipmentUpgradeSearch from './EquipmentUpgradeSearch';
+import type { SkillAffixSearch } from './skillAffixGuide';
 type Preset = EquipmentTradePreset | 't1';
 
 export interface EquipmentTradePanelProps {
@@ -36,21 +38,24 @@ export interface EquipmentTradePanelProps {
   loadoutContext?: LoadoutContext;
   onRecordQuote?: PriceEstimateProps['onRecordQuote'];
   onRepairItem?: (expectedRaw: string, repairedRaw: string) => void;
+  skillSearch?: SkillAffixSearch;
 }
 export default function EquipmentTradePanel(props: EquipmentTradePanelProps) {
   const [recovered, setRecovered] = useState<{ original: string; raw: string } | null>(null);
   const raw = recovered?.original === props.raw ? recovered.raw : props.raw;
   const parsed = useMemo(() => parseEquipment(raw), [raw]);
   const [selectedType, setSelectedType] = useState('');
-  const [repairOnUpgrade, setRepairOnUpgrade] = useState(props.intent === 'upgrade');
-  const intent = repairOnUpgrade ? 'upgrade' : props.intent;
+  const [repairOnUpgrade, setRepairOnUpgrade] = useState(props.intent !== 't1');
+  const intent = props.intent ?? 'price';
   const selected = parsed?.officialTypeCandidates?.find((candidate) => candidate.type === selectedType);
   const equipment = parsed && selected ? { ...parsed, baseNameEnglish: selected.type, category: selected.category,
     warnings: parsed.warnings.filter((warning) => !warning.includes('对应多件官方物品')) } : parsed;
   if (!equipment) return <div className="wb-trade-search"><h3>全物品查价</h3><p>请粘贴完整物品文本，包括稀有度和名称。支持装备、地图、碑牌、宝石、通货及材料的繁体、简体和英文文本。</p></div>;
   return <><PobItemRepair key={raw} raw={raw} auto={repairOnUpgrade} context={props.loadoutContext} onRepair={(next) => {
     props.onRepairItem?.(raw, next); setRecovered({ original: props.raw, raw: next });
-  }} />{parsed?.officialTypeCandidates && <label className="wb-form-label">此中文名称存在歧义，请核对物品说明选择官方名称<select aria-label="选择准确的官方物品" value={selected?.type ?? ''} onChange={(event) => setSelectedType(event.target.value)}><option value="">请选择，不自动猜测</option>{parsed.officialTypeCandidates.map((candidate) => <option key={candidate.type} value={candidate.type}>{candidate.type}</option>)}</select></label>}<EquipmentTradeEditor key={`${raw}:${selected?.type ?? ''}:${intent ?? 'price'}`} {...props} intent={intent} raw={raw} equipment={equipment} onUpgrade={() => setRepairOnUpgrade(true)} /></>;
+  }} />{parsed?.officialTypeCandidates && <label className="wb-form-label">此中文名称存在歧义，请核对物品说明选择官方名称<select aria-label="选择准确的官方物品" value={selected?.type ?? ''} onChange={(event) => setSelectedType(event.target.value)}><option value="">请选择，不自动猜测</option>{parsed.officialTypeCandidates.map((candidate) => <option key={candidate.type} value={candidate.type}>{candidate.type}</option>)}</select></label>}{(!equipment.kind || equipment.kind === 'equipment') && intent !== 't1'
+    ? <EquipmentUpgradeSearch key={`${raw}:${selected?.type ?? ''}`} {...props} raw={raw} equipment={equipment} />
+    : <EquipmentTradeEditor key={`${raw}:${selected?.type ?? ''}:${intent ?? 'price'}`} {...props} intent={intent} raw={raw} equipment={equipment} onUpgrade={() => setRepairOnUpgrade(true)} />}</>;
 }
 
 function EquipmentTradeEditor({ equipment, raw, league, onLeague, autoEstimate, onEstimate, onCompare, leagues = [], leagueError, intent = 'price', t1Data, t1Trade, loadoutContext, onRecordQuote, onUpgrade }: EquipmentTradePanelProps & { equipment: Equipment; onUpgrade: () => void }) {
@@ -220,7 +225,7 @@ function EquipmentTradeEditor({ equipment, raw, league, onLeague, autoEstimate, 
       {upgrading ? <UpgradeCandidates key={JSON.stringify(result.query)} query={result.query} url={result.url} league={league} components={upgradeComponents(activeRows)} scoringRows={activeRows} auto={!hasSearched && !raw.includes(POB_REVIEW_MARKER)} onSearch={() => setHasSearched(true)} onCompare={onCompare ? (item) => onCompare(item, captureUpgradeSearch(loadoutContext, activeRows)) : undefined} itemRaw={raw}
         loadoutContext={loadoutContext && liveLoadoutContext(loadoutContext) ? loadoutContext : undefined} />
         : !nonEquipment && preset === 'similar' ? <CorePriceEstimate key={JSON.stringify([raw, league, exactBase, exactUnique, sameCorruption, status, activeRows])}
-          options={{ equipment: searchEquipment, league, rows: activeRows, exactBase, exactUnique, sameCorruption, status }} guides={guides}
+          options={{ equipment: searchEquipment, league, rows: activeRows, exactBase, exactUnique, sameCorruption, status }}
           auto={autoEstimate} onEstimate={onEstimate} onRecordQuote={onRecordQuote} onCompare={onCompare} />
         : <PriceEstimate query={result.query} url={result.url} league={league} auto={autoEstimate} onEstimate={onEstimate} itemRaw={raw}
           onRecordQuote={preset === 'similar' || preset === 'strict' ? onRecordQuote : undefined}

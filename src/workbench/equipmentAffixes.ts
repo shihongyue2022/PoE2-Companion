@@ -15,22 +15,24 @@ export function affixBase(equipment: Equipment, data?: PatchData): ItemBase | un
 export interface AvailableAffix {
   mod: EquipmentMod; type: 'prefix' | 'suffix'; family: string;
   reference: EquipmentT1Reference;
+  requiredRune?: string;
 }
 /** Only verified, ordinary affixes from this base. Unique mods are a separate item definition. */
-export function availableAffixes(equipment: Equipment, data?: PatchData, trade?: GearTrade | null): AvailableAffix[] {
+export function availableAffixes(equipment: Equipment, data?: PatchData, trade?: GearTrade | null, allowedRunes: readonly string[] = []): AvailableAffix[] {
   const base = data && affixBase(equipment, data);
   if (!base || !data || !trade || equipment.rarity === 'unique') return [];
-  const pool = [...new Set([...base.pools.normal.prefixes, ...base.pools.normal.suffixes])].flatMap((id) => data.mods.get(id) ?? []);
+  const pool = [...new Set([...base.pools.normal.prefixes, ...base.pools.normal.suffixes,
+    ...allowedRunes.flatMap((id) => { const pool = base.pools.rune?.[id]; return pool ? [...pool.prefixes, ...pool.suffixes] : []; })])].flatMap((id) => data.mods.get(id) ?? []);
   const found = new Map<string, AvailableAffix>();
   for (const entry of pool) {
-    if (entry.source !== 'normal' || entry.rune) continue;
+    if (entry.source !== 'normal' || entry.rune && !allowedRunes.includes(entry.rune)) continue;
     for (const [line, mapping] of (trade.mods[entry.id] ?? []).entries()) {
       if (!mapping || !trade.rows[mapping[0]]?.ids.length) continue;
       const layout = tradeLineRangeMapping(entry, mapping, line), mod = probeAffix(entry, line, layout.first, layout.count);
       if (!mod?.searchable || !mod.ref) continue;
-      const reference = referenceFor(mod, pool, data, trade);
+      const reference = referenceFor(mod, pool, data, trade, allowedRunes);
       if (reference.status !== 't1' || !reference.roll) continue;
-      found.set(`${entry.type}:${entry.family}:${mod.ref}`, { mod, type: entry.type, family: entry.family, reference });
+      found.set(`${entry.type}:${entry.family}:${mod.ref}`, { mod, type: entry.type, family: entry.family, reference, requiredRune: entry.rune });
     }
   }
   return [...found.values()];
@@ -44,7 +46,7 @@ function probeAffix(entry: Mod, line: number, first: number, count: number): Equ
 }
 export function affixTargetMetadata(affix: AvailableAffix, patch?: string): Partial<EquipmentTradeRow> {
   return { affixType: affix.type, affixFamily: affix.family, targetRange: affix.reference.roll,
-    targetTiers: affix.reference.tiers, targetFloor: { min: affix.reference.min, max: affix.reference.max }, targetPatch: patch };
+    targetTiers: affix.reference.tiers, targetFloor: { min: affix.reference.min, max: affix.reference.max }, targetPatch: patch, requiredRune: affix.requiredRune };
 }
 export function describeAffixRows(rows: readonly EquipmentTradeRow[], equipment: Equipment, catalogue: readonly AvailableAffix[], patch?: string) {
   return rows.map((row) => {

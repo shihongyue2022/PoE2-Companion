@@ -11,12 +11,12 @@ import { addResistanceAffixRows, availableAffixes } from './equipmentAffixes';
 import { activeWeaponSet } from './weaponSets';
 
 /** Shared defaults for market ranking and the equipment comparison page. */
-export function upgradeSearchRows(equipment: Equipment, context?: LoadoutContext, data?: PatchData, trade?: GearTrade | null): EquipmentTradeRow[] {
+export function upgradeSearchRows(equipment: Equipment, context?: LoadoutContext, data?: PatchData, trade?: GearTrade | null, allowedRunes: readonly string[] = []): EquipmentTradeRow[] {
   const targets = context && liveLoadoutContext(context) && usesDamageGoal(context.state)
-    ? skillTargetRows(equipment, context.state, data, trade ?? undefined) : [];
+    ? skillTargetRows(equipment, context.state, data, trade ?? undefined, 12, allowedRunes) : [];
   const rows = mergeSkillTargetRows(equipmentTradeRows(equipment, 'upgrade'), targets, equipment);
   return addResistanceAffixRows(automaticUtilityRows(loadoutUpgradeRows(rows, equipment, context), equipment), equipment,
-    context, availableAffixes(equipment, data, trade), data?.patch);
+    context, availableAffixes(equipment, data, trade, allowedRunes), data?.patch);
 }
 
 export interface UpgradeSearchSnapshot { slot: LoadoutSlot; sourceRaw: string; contextKey: string; rows: readonly EquipmentTradeRow[] }
