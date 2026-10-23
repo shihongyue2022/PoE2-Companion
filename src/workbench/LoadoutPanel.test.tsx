@@ -58,7 +58,9 @@ describe('loadout player actions', () => {
     await user.click(screen.getByRole('button', { name: '保存当前游戏面板基准' }));
     fireEvent.change(screen.getByLabelText('粘贴候选装备'), { target: { value: ring('Lower Fire', 70).replace('+25%', '+5%') } });
     expect(screen.getByText('已比较属性持平')).toBeVisible();
-    expect(screen.getByText(/有效 75% → 75%；总值 189% → 169%/)).toBeVisible();
+    const resistance = within(screen.getByRole('article', { name: '火焰抗性' }));
+    expect(resistance.getByText('有效：75% → 75% · 上限 75%')).toBeVisible();
+    expect(resistance.getByText('总值：189% → 169%')).toBeVisible();
     const state = JSON.parse(localStorage.getItem(LOADOUT_STORAGE_KEY)!);
     expect(state.character.values).toMatchObject({ life: 1530, energyShield: 4898, fireResistance: 189 });
   });
@@ -106,7 +108,7 @@ describe('loadout player actions', () => {
     expect(localStorage.getItem(LOADOUT_STORAGE_KEY)).toContain('Dusk Loop');
   });
 
-  it('keeps a mismatched item out of the selected slot and blocks adopting it as a candidate', async () => {
+  it('blocks a mismatched direct import but auto-routes a complete candidate to its matching slot', async () => {
     const user = userEvent.setup();
     render(<LoadoutPanel onPrice={vi.fn()} />);
     await user.click(screen.getByRole('button', { name: '胸甲：未装备' }));
@@ -115,7 +117,9 @@ describe('loadout player actions', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('不能放入胸甲');
     expect(screen.getByRole('button', { name: '胸甲：未装备' })).toBeVisible();
     fireEvent.change(screen.getByLabelText('粘贴候选装备'), { target: { value: ring('Dusk Loop', 90) } });
-    expect(screen.getByRole('button', { name: '采用候选并替换胸甲' })).toBeDisabled();
-    expect(screen.getByText('信息不足，暂不能判定升级')).toBeVisible();
+    expect(screen.getByRole('button', { name: '采用候选并替换左戒指' })).toBeEnabled();
+    expect(screen.getByText('请先导入当前左戒指')).toBeVisible();
+    expect(screen.getByRole('combobox', { name: '选择装备栏位' })).toHaveValue('ring1');
+    expect(localStorage.getItem(LOADOUT_STORAGE_KEY)).toBeNull();
   });
 });

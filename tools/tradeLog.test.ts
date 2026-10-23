@@ -26,6 +26,7 @@ describe('bounded local trade log summary', () => {
     const service = createTradeLogService([log]);
     const summary = await service.read(true);
     expect(summary.events).toHaveLength(1);
+    expect(summary.diagnostics).toMatchObject({ history: true, lines: 3, whispers: 2, unmatchedTradeMessages: 0, acceptanceHints: 1 });
     expect(summary.events[0]).toMatchObject({ player: 'Trader', amount: 2, currency: 'divine', acceptedAt: new Date(2026, 9, 22, 20, 0, 2).toISOString() });
     expect(JSON.stringify(summary)).not.toMatch(/PRIVATE_CHAT|倉庫頁|Client 1|workbench-trade-test/);
     expect((await service.read()).events[0]?.id).toBe(summary.events[0]?.id);

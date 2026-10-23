@@ -1,4 +1,5 @@
 import type { Currency } from './finance';
+import { isCurrency } from './finance';
 
 export interface TradeCandidate {
   id: string; at: string; player: string; item: string; quantity: number;
@@ -16,6 +17,12 @@ const aliases: Record<string, Currency> = {
 };
 export function tradeCurrency(text: string): Currency | null {
   const key = text.trim().toLowerCase().replace(/[.。]$/, '');
+  if (isCurrency(key)) return key;
+  const tiered = /^(greater|perfect)-(exalted|chaos|regal|transmutation|augmentation)-orb$/.exec(key);
+  if (tiered) {
+    const stem = ({ exalted: 'exalt', chaos: 'chaos', regal: 'regal', transmutation: 'transmute', augmentation: 'augment' } as Record<string, string>)[tiered[2]!];
+    const native = `${stem}_${tiered[1]}`; if (isCurrency(native)) return native;
+  }
   return Object.prototype.hasOwnProperty.call(aliases, key) ? aliases[key]! : null;
 }
 export function logTimestamp(line: string): string | null {
@@ -51,4 +58,7 @@ export function parseTradeMessage(raw: string, options: { id: string; at?: strin
     quantity, amount: value, currency: tradeCurrency(unit!), currencyText: unit!.trim().slice(0, 100), league: league!.trim().slice(0, 150), source: options.source };
 }
 
-export interface TradeLogSummary { found: boolean; source?: string; modifiedAt?: string; events: TradeCandidate[]; truncated: boolean; warning?: string }
+export interface TradeLogSummary {
+  found: boolean; source?: string; modifiedAt?: string; events: TradeCandidate[]; truncated: boolean; warning?: string;
+  diagnostics?: { history: boolean; bytesRead: number; lines: number; whispers: number; unmatchedTradeMessages: number; acceptanceHints: number; firstAt?: string; lastAt?: string };
+}

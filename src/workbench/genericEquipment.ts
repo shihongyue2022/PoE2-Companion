@@ -9,6 +9,8 @@ export interface EquipmentMod {
   key: string; raw: string; text: string; label: string; ids: string[]; values: number[];
   searchable: boolean; value?: number; warning?: string; ref?: string; statId?: string;
   affixType?: 'prefix' | 'suffix';
+  /** Advanced-copy modifier block. Several printed lines can occupy one affix slot. */
+  affixGroup?: number;
   recognized?: boolean; referenceUrl?: string; englishText?: string;
 }
 export interface Equipment {
@@ -31,7 +33,11 @@ const rawIndex = source as unknown as Index;
 // Some unreleased bases have no localized name. Keep their verified English entry without
 // passing a missing translation into Unicode normalization or discarding the whole catalogue.
 const index: Index = { ...rawIndex, items: [...rawIndex.items, ...tradeItems.items].filter((item) => typeof item.en === 'string')
-  .map((item) => ({ ...item, zh: typeof item.zh === 'string' ? item.zh : item.en })) };
+  .map((item) => ({ ...item, zh: typeof item.zh === 'string' ? item.zh : item.en })),
+  // The pinned localized matcher puts the roll before the sentence; the game copy
+  // puts it after the resistance name. Retain the same verified native ref and ID.
+  stats: rawIndex.stats.map((stat) => stat.id === 'local_base_chaos_damage_resistance_%_per_rune_or_soul_core' && stat.ref === '#% to Chaos Resistance per Socket filled'
+    ? { ...stat, matchers: [...stat.matchers, { string: '每個鑲嵌的插槽使混沌抗性+#%' }, { string: '每個鑲嵌的插槽使混沌抗性#%' }] } : stat) };
 export const EQUIPMENT_TRADE_CATEGORIES: readonly string[] = index.categories;
 export const ITEM_KIND_LABELS = { equipment: '装备', waystone: '换界石（地图）', tablet: '碑牌', map: '终局物品', currency: '通货 / 材料', gem: '宝石', other: '其他物品' };
 export const itemKindLabel = (item: Equipment): string => ITEM_KIND_LABELS[item.kind ?? 'equipment'];
@@ -258,6 +264,7 @@ export function parseEquipment(raw: string): Equipment | null {
   const stackSize = printedNumber(/(?:Stack Size|堆疊數量|堆叠数量)[:：]\s*([\d,]+)/i);
   const origins = new Map<number, string>(); let currentOrigin: string | undefined;
   const affixTypes = new Map<number, 'prefix' | 'suffix'>(); let currentAffixType: 'prefix' | 'suffix' | undefined;
+  const affixGroups = new Map<number, number>(); let currentAffixGroup: number | undefined; let nextAffixGroup = 0;
   const flavourText: string[] = [], stateText: string[] = [];
   const originalBody = lines.slice(rarityAt + 1 + header.length);
   let seenAdvancedAffix = false;
@@ -282,10 +289,11 @@ export function parseEquipment(raw: string): Equipment | null {
     if (advanced) seenAdvancedAffix = true;
   }
   for (const line of body) {
-    if (/^-{3,}$/.test(line)) { modLines.push(''); currentOrigin = undefined; currentAffixType = undefined; continue; }
+    if (/^-{3,}$/.test(line)) { modLines.push(''); currentOrigin = undefined; currentAffixType = undefined; currentAffixGroup = undefined; continue; }
     if (/^\{/.test(line)) {
       const metadata = simplifyEquipmentText(line);
       currentAffixType = /prefix|前缀/i.test(metadata) ? 'prefix' : /suffix|后缀/i.test(metadata) ? 'suffix' : undefined;
+      currentAffixGroup = nextAffixGroup++;
       currentOrigin = /implicit|固定/i.test(metadata) ? 'implicit' : /fractured|破裂/i.test(metadata) ? 'fractured'
         : /rune|符文/i.test(metadata) ? 'rune' : /enchant|附魔/i.test(metadata) ? 'enchant'
           : /desecrated|亵渎/i.test(metadata) ? 'desecrated' : /crafted|工艺/i.test(metadata) ? 'crafted' : undefined;
@@ -301,6 +309,7 @@ export function parseEquipment(raw: string): Equipment | null {
     if (ignoredLine(simplifyEquipmentText(line)) && !parseMod(line, 'ignored-check', currentOrigin).searchable) continue;
     if (currentOrigin) origins.set(modLines.length, currentOrigin);
     if (currentAffixType) affixTypes.set(modLines.length, currentAffixType);
+    if (currentAffixGroup !== undefined) affixGroups.set(modLines.length, currentAffixGroup);
     modLines.push(line);
   }
   const mods: EquipmentMod[] = [];
@@ -310,10 +319,12 @@ export function parseEquipment(raw: string): Equipment | null {
     // A few game stats wrap to two/three clipboard lines. Preserve one official scalar per stat.
     for (let count = 2; count <= 4 && modLines.slice(i, i + count).length === count && modLines.slice(i, i + count).every(Boolean); count++) {
       if (modLines.slice(i, i + count).some((_, offset) => origins.get(i + offset) !== origins.get(i))) break;
+      if (modLines.slice(i, i + count).some((_, offset) => affixGroups.get(i + offset) !== affixGroups.get(i))) break;
       const joined = parseMod(modLines.slice(i, i + count).join('\n'), String(i), origins.get(i));
       if (joined.searchable) { best = joined; consumed = count - 1; }
     }
     if (affixTypes.has(i)) best.affixType = affixTypes.get(i);
+    if (affixGroups.has(i)) best.affixGroup = affixGroups.get(i);
     mods.push(best); i += consumed;
   }
   // S identifies an augment socket, not its occupancy. PoB enumerates Rune: None

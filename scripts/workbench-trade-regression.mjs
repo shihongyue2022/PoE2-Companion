@@ -45,7 +45,7 @@ try {
   assert.equal(await page.locator('.wb-trade-filter.enabled').count(), 3);
   const total = page.locator('[data-filter-key="pseudo:elemental-resistance"]');
   assert(await total.getByRole('checkbox').isChecked());
-  assert.equal(await total.getByLabel('总元素抗性 下限').inputValue(), '62.4');
+  assert.equal(await total.getByLabel('总元素抗性 下限', { exact: true }).inputValue(), '62.4');
   check('similar search selects three useful stats including 78 total resistance at 80%, with no hidden base or ilvl');
 
   await page.getByRole('button', { name: '全部实际属性' }).click();
@@ -56,6 +56,7 @@ try {
   check('all-actual search keeps fire 36.5, lightning 34, mana157, rarity18, allres15 and cold33 without reapplying quality');
 
   const fire = page.locator('.wb-trade-filter[data-mod-id="Rings/FireDamage"]');
+  await fire.locator('input[type="number"]').first().locator('xpath=ancestor::details[1]').locator(':scope > summary').click();
   await fire.locator('input[type="number"]').first().fill('20');
   q = await query();
   assert(q.stats.flatMap((group) => group.filters).some((filter) => filter.value?.min === 20));
@@ -75,12 +76,13 @@ try {
   await page.getByRole('button', { name: '宽松比较' }).click();
   assert.equal(await page.locator('.wb-trade-filter.enabled').count(), 2);
   await page.getByLabel('属性匹配', { exact: true }).selectOption('count');
-  await page.getByLabel('至少满足属性数').fill('1');
+  await page.getByLabel('至少满足属性数').selectOption('1');
   q = await query();
   assert(q.stats.some((group) => group.type === 'count' && group.value.min === 1));
   check('relaxing removes base/ilvl and supports matching only part of selected stats');
 
   await page.getByRole('button', { name: '全部实际属性' }).click();
+  await fire.locator('input[type="number"]').last().locator('xpath=ancestor::details[1]').locator(':scope > summary').click();
   await fire.locator('input[type="number"]').last().fill('10');
   assert.equal(await searchLink().count(), 0);
   assert.match(await page.getByRole('alert').innerText(), /下限不能大于上限/);
@@ -96,7 +98,7 @@ try {
   const cold = page.locator('.wb-trade-filter[data-mod-id="Rings/ColdResistance"]');
   assert.equal(await mana.locator('input[type="number"]').first().inputValue(), '165');
   assert.equal(await fire.locator('input[type="number"]').first().inputValue(), '36.5');
-  assert.equal(await total.getByLabel('总元素抗性 下限').inputValue(), '86');
+  assert.equal(await total.getByLabel('总元素抗性 下限', { exact: true }).inputValue(), '86');
   q = await query();
   assert.equal(q.type, undefined);
   assert.equal(q.filters.misc_filters, undefined);

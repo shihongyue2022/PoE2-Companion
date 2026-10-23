@@ -1,6 +1,7 @@
 import type { FlexibleTradeDocument } from './tradeSearch';
 import { equipmentMetrics, equipmentStatAliases, type Equipment } from './genericEquipment';
 import { upgradeComponents } from './upgradeRanking';
+import type { EquipmentT1Reference } from './equipmentT1';
 
 export interface EquipmentTradeRow {
   key: string; label: string; ids: string[]; enabled: boolean; min: string; max: string;
@@ -17,6 +18,9 @@ export interface EquipmentTradeRow {
   targetRange?: { min: number; max: number };
   targetFloor?: { min?: number; max?: number };
   targetPatch?: string;
+  targetTiers?: EquipmentT1Reference['tiers'];
+  affixType?: 'prefix' | 'suffix';
+  affixFamily?: string;
 }
 export type EquipmentTradePreset = 'similar' | 'strict' | 'base' | 'upgrade';
 const format = (value: number): string => String(Math.round(value * 100) / 100);
@@ -108,7 +112,10 @@ export function buildEquipmentTrade({ equipment, league, rows, exactBase = true,
       if (min !== undefined || max !== undefined) target[row.equipmentFilter] = value;
       continue;
     }
-    if (ranking && min === undefined && max === undefined && row.actualValue !== undefined && !row.presenceOnly) continue;
+    // A newly enabled utility recommendation requests this actual affix. Scored
+    // damage alternatives remain optional so we do not require every target at once.
+    if (ranking && min === undefined && max === undefined && row.actualValue !== undefined && !row.presenceOnly
+      && !(row.suggested && Number(row.weight ?? '1') === 0)) continue;
     if (!row.ids.length) throw new Error(`${row.label}没有已核对的交易属性。`);
     const filters = [...new Set(row.ids)].map((id) => ({ id, ...(min === undefined && max === undefined ? {} : { value }), disabled: false as const }));
     if (filters.length === 1) simple.push(filters[0]!);

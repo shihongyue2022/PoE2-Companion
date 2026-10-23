@@ -34,10 +34,24 @@
 .tt-search input { width: 100%; border: 0!important; background: transparent!important; }
 .wb-finance .tt-enable { display: flex; flex-direction: row; align-items: center; gap: 7px; font-size: 12px; color: #c1c9a4; margin-inline: 8px; }
 .tt-status { min-height: 18px; }
+.tt-sources { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-top: 18px; }
+.tt-sources > div, .tt-import { border: 1px solid #414b31; border-radius: 8px; padding: 14px; overflow-wrap: anywhere; }
+.tt-sources small { display: block; color: #afb495; line-height: 1.65; margin: 7px 0; }
+.tt-sources a { display: inline-flex; gap: 6px; align-items: center; margin-right: 15px; }
+.tt-import { margin: 18px 0; }
+.tt-import-columns { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin: 12px 0; }
+.tt-import-columns label { display: flex; flex-direction: column; gap: 6px; }
+.tt-currency-summary { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.tt-currency-summary button { border: 1px solid #465137; border-radius: 6px; padding: 8px; }
+.tt-currency-summary button[aria-pressed=true] { background: #354328; }
+.tt-diagnostics > summary { cursor: pointer; font-size: 13px; color: #afb495; }
 .tt-inbox, .tt-records { padding: 18px; margin: 18px 0; border: 1px solid #39432c; border-radius: 8px; }
 .tt-inbox > summary { cursor: pointer; color: #d1d9b6; }
-.tt-pending-row { display: grid; grid-template-columns: minmax(180px,1fr) 90px 100px 125px auto 40px; gap: 8px; align-items: center; padding: 15px 0; border-bottom: 1px solid #333f29; }
+.tt-pending-row { display: grid; grid-template-columns: minmax(180px,1fr) minmax(130px,auto) auto 40px; gap: 8px; align-items: center; padding: 15px 0; border-bottom: 1px solid #333f29; }
 .tt-pending-row small { display: block; color: #a9b38f; font-size: 11px; margin-top: 6px; }
+.tt-quote-value { display: block; margin-top: 8px; color: #dce3c4; }
+.tt-pending-row > details { grid-column: 1/-1; }
+.tt-pending-correction { display: flex; gap: 10px; flex-wrap: wrap; padding: 10px 0; }
 .tt-paste { display: flex; align-items: flex-end; gap: 12px; margin-top: 12px; }
 .tt-paste textarea { flex: 1; min-width: 0; }
 .tt-record-heading { margin-bottom: 18px; }
@@ -56,6 +70,7 @@
 .wb-finance .fn-section:not([open]) { margin-top: 16px; padding-top: 16px; }
 @media(max-width:1100px) { .tt-pending-row { grid-template-columns: 1fr 90px 100px; } .tt-pending-row > div:first-child { grid-column: 1/-1; } }
 @media(max-width:680px) {
+  .tt-sources { grid-template-columns: 1fr; } .tt-import-columns { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .tt-heading { align-items: flex-start; flex-direction: column; }
   .tt-filters { width: 100%; } .tt-filters select { width: 50%; }
   .tt-cards { gap: 7px; } .tt-card { padding: 15px 10px; gap: 7px; }

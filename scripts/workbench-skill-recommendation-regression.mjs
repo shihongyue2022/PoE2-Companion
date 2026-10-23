@@ -35,7 +35,7 @@ try {
   const workflow = loadout.getByRole('navigation', { name: '配装提升流程' });
   await workflow.getByRole('button', { name: /^导入角色/ }).click();
   await expect(loadout.getByRole('region', { name: '整套装备导入' })).toBeVisible();
-  await loadout.locator('.lo-import-entry > summary').click();
+  await expect(loadout.getByRole('button', { name: '打开 PoB2' })).toBeVisible();
   await workflow.getByRole('button', { name: /^校准抗性/ }).click();
   await expect(loadout.getByRole('button', { name: '保存当前游戏面板基准' })).toBeVisible();
   await workflow.getByRole('button', { name: /^确认方向/ }).click();

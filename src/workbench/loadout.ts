@@ -9,6 +9,8 @@ import { assessDamageGoal, damageGoalRows, usesDamageGoal, type DamageGoalAssess
 import { equipmentTradeRows } from './genericEquipmentTrade';
 import type { EquipmentTradeRow } from './genericEquipmentTrade';
 import { readMainSkillSelection, type MainSkillSelection } from './skillRecommendation';
+import { knownFilledSockets, recordSocketEvidence, type SocketEvidence, type ResistanceContext } from './resistanceModel';
+import { readWeaponPair, syncWeaponSets } from './weaponSets';
 
 export const LOADOUT_STORAGE_KEY = 'poe2-workbench-loadout-v1';
 
@@ -62,6 +64,7 @@ export type ResistanceKey = typeof RESISTANCE_KEYS[number];
 export const DEFAULT_PRIORITIES: MetricKey[] = ['life', 'fireResistance', 'coldResistance', 'lightningResistance'];
 
 export interface LoadoutGoals {
+  resistanceCaps?: Partial<Record<ResistanceKey, number>>;
   objective?: 'capped-damage' | 'balanced';
   priorities: MetricKey[];
   minimums: Partial<Record<ResistanceKey, number>>;
@@ -69,6 +72,9 @@ export interface LoadoutGoals {
   mainSkill?: MainSkillSelection;
 }
 export interface LoadoutState {
+  lastImport?: { at: string; equipmentChanges: number; formatOnly: number; newlyRead: number; informationChanges: number };
+  weaponSets?: import('./weaponSets').WeaponSets;
+  socketEvidence?: SocketEvidence[];
   version: 1;
   slots: Partial<Record<LoadoutSlot, string>>;
   goals: LoadoutGoals;
@@ -113,18 +119,19 @@ export function equipmentSlotError(slot: LoadoutSlot, item: Equipment, state: Lo
   return null;
 }
 export type EquipResult = { ok: true; state: LoadoutState; item: Equipment } | { ok: false; error: string };
-export function equipRaw(state: LoadoutState, slot: LoadoutSlot, raw: string): EquipResult {
+export function equipRaw(state: LoadoutState, slot: LoadoutSlot, raw: string, context: ResistanceContext = {}): EquipResult {
   if (raw.trim().length > 100_000) return { ok: false, error: '单件装备文本过长，请粘贴游戏内复制的单件物品。' };
   const item = parseEquipment(raw);
   if (!item) return { ok: false, error: '没有读到装备。请在游戏内复制完整物品文字，包含物品类别与稀有度。' };
   const error = equipmentSlotError(slot, item, state);
   if (error) return { ok: false, error };
-  return { ok: true, state: { ...state, slots: { ...state.slots, [slot]: raw.trim() } }, item };
+  const evidence = recordSocketEvidence(state, parseEquipment(state.slots[slot] ?? ''), item, context);
+  return { ok: true, state: syncWeaponSets({ ...state, ...(evidence ? { socketEvidence: evidence } : {}), slots: { ...state.slots, [slot]: raw.trim() } }), item };
 }
 export function removeSlot(state: LoadoutState, slot: LoadoutSlot): LoadoutState {
   const slots = { ...state.slots };
   delete slots[slot];
-  return { ...state, slots };
+  return syncWeaponSets({ ...state, slots });
 }
 export function loadoutWarnings(state: LoadoutState): string[] {
   const warnings: string[] = [];
@@ -197,8 +204,8 @@ export function compareCandidate(state: LoadoutState, slot: LoadoutSlot, candida
   context: { beforeFilledSockets?: number; afterFilledSockets?: number; damageRows?: readonly EquipmentTradeRow[] } = {}): EquipmentComparison {
   const current = parseEquipment(state.slots[slot] ?? '');
   const conflict = equipmentSlotError(slot, candidate, state);
-  const oldDetails: ReturnType<typeof equipmentMetricDetails> = current ? equipmentMetricDetails(current, { filledSockets: context.beforeFilledSockets }) : { values: {}, uncounted: [], pending: [], explanations: [], effects: [] };
-  const newDetails = equipmentMetricDetails(candidate, { filledSockets: context.afterFilledSockets });
+  const oldDetails: ReturnType<typeof equipmentMetricDetails> = current ? equipmentMetricDetails(current, { filledSockets: knownFilledSockets(state, current, context.beforeFilledSockets) }) : { values: {}, uncounted: [], pending: [], explanations: [], effects: [] };
+  const newDetails = equipmentMetricDetails(candidate, { filledSockets: knownFilledSockets(state, candidate, context.afterFilledSockets) });
   const metrics = METRICS.map((metric) => ({ ...metric,
     before: round(oldDetails.values[metric.key] ?? 0), after: round(newDetails.values[metric.key] ?? 0),
     delta: round((newDetails.values[metric.key] ?? 0) - (oldDetails.values[metric.key] ?? 0)),
@@ -227,7 +234,7 @@ export function compareCandidate(state: LoadoutState, slot: LoadoutSlot, candida
   if (metrics.some((metric) => metric.key.startsWith('global') && (metric.before || metric.after || metric.beforeUnknown || metric.afterUnknown))) warnings.push('全域防御增加与其他 increased 加成相加，未直接乘到装备防御或角色面板；实际收益取决于天赋、技能及其他装备。');
   if (characterResistances.length) warnings.push('角色抗性按已录入的未封顶总值与装备差值估算，其他天赋、技能及条件保持不变；生命和防御仍只比较装备贡献。');
   warnings.push(...buildCandidateWarnings(state, slot, candidate));
-  if (state.character && !validCharacterPanel(state)) warnings.push('装备已变化，游戏面板基准已失效，请重新录入当前面板后再判断有效抗性。');
+  if (state.character && !validCharacterPanel(state)) warnings.push('装备已变化，生命与防御旧面板需更新；可核对的抗性按原角色基准与整套累计差值推算。天赋或状态改变时请更新 PoB2／游戏基准。');
   if (conflict) warnings.push(conflict);
   if (!current) warnings.push('当前栏位为空，没有旧装备可比较。');
   if (!candidate.identified || (current && !current.identified)) warnings.push('含未鉴定装备，未知词缀不能按零属性比较。');
@@ -243,7 +250,7 @@ export function compareCandidate(state: LoadoutState, slot: LoadoutSlot, candida
   if (sameItemText && !identical) warnings.push('两件的物品文字相同，差异仅来自本次镶嵌数量设置。请先核对或补齐现有装备，不必据此购买另一件。');
   const blockingWarnings = parserWarnings.filter((warning) => !/^\d+ 项效果已识别，但无独立交易条件/.test(warning));
   const insufficient = !current || !candidate.identified || !current.identified || !!conflict || changedEffects || blockingWarnings.length > 0 || oldDetails.pending.length > 0 || newDetails.pending.length > 0
-    || !!state.character && !validCharacterPanel(state);
+    || !!state.character && !validCharacterPanel(state) && !characterResistances.length;
   const paperStatus: ComparisonStatus = !current || !candidate.identified || !current.identified || !!conflict || !metrics.some((metric) => !metric.beforeUnknown && !metric.afterUnknown) ? 'insufficient'
     : positive && negative ? 'tradeoff' : positive ? 'upgrade' : negative ? 'downgrade' : 'equal';
   let status: ComparisonStatus = insufficient ? 'insufficient' : paperStatus;
@@ -282,7 +289,7 @@ export function compareCandidate(state: LoadoutState, slot: LoadoutSlot, candida
     uncountedBefore: oldDetails.uncounted, uncountedAfter: newDetails.uncounted, targets, warnings, canEquip: !conflict };
 }
 
-export function serializeLoadout(state: LoadoutState): string { return JSON.stringify(state, null, 2); }
+export function serializeLoadout(state: LoadoutState): string { return JSON.stringify(syncWeaponSets(state), null, 2); }
 export function deserializeLoadout(text: string): { state: LoadoutState | null; error: string } {
   const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
   if (text.length > 1_500_000) return { state: null, error: '装备方案文件过大。' };
@@ -302,8 +309,31 @@ export function deserializeLoadout(text: string): { state: LoadoutState | null; 
     if (!result.ok) return { state: null, error: `${slotLabel(key)}：${result.error}` };
     state = result.state;
   }
+  if (data.weaponSets !== undefined) {
+    const sets = data.weaponSets;
+    if (!record(sets) || sets.active !== 1 && sets.active !== 2) return { state: null, error: '武器组记录无效。' };
+    const first = readWeaponPair(sets.first), second = readWeaponPair(sets.second);
+    if (!first || !second) return { state: null, error: '武器组包含无效的主副手组合。' };
+    state = syncWeaponSets({ ...state, weaponSets: { active: sets.active, first, second } });
+    if (record(sets.caps)) {
+      const caps: NonNullable<NonNullable<LoadoutState['weaponSets']>['caps']> = {};
+      for (const side of ['first', 'second'] as const) if (record(sets.caps[side])) {
+        const values = sets.caps[side];
+        caps[side] = {};
+        for (const key of RESISTANCE_KEYS) {
+          const value = values[key]; if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100) caps[side][key] = value;
+        }
+      }
+      state.weaponSets = { ...state.weaponSets!, caps };
+    }
+  }
   if (data.goals && typeof data.goals === 'object') {
     const goals = data.goals as Record<string, unknown>;
+    if (record(goals.resistanceCaps)) {
+      const caps: Partial<Record<ResistanceKey, number>> = {};
+      for (const key of RESISTANCE_KEYS) { const cap = goals.resistanceCaps[key]; if (typeof cap === 'number' && Number.isFinite(cap) && cap >= 0 && cap <= 100) caps[key] = cap; }
+      state.goals.resistanceCaps = caps;
+    }
     state.goals.mainSkill = readMainSkillSelection(goals.mainSkill);
     if (goals.objective === 'balanced' || goals.objective === 'capped-damage') state.goals.objective = goals.objective;
     const build = readBuildProfile(goals.build); if (build) state.goals.build = build;
@@ -333,14 +363,30 @@ export function deserializeLoadout(text: string): { state: LoadoutState | null; 
       const cap = panel.caps[key];
       if (typeof cap === 'number' && Number.isFinite(cap) && cap >= 0 && cap <= 100) caps[key] = cap;
     }
-    state.character = { values, caps, itemValues, equipmentSignature: panel.equipmentSignature, recordedAt: panel.recordedAt };
+    state.character = { values, caps, itemValues, equipmentSignature: panel.equipmentSignature, recordedAt: panel.recordedAt,
+      ...(panel.weaponSet === 1 || panel.weaponSet === 2 ? { weaponSet: panel.weaponSet } : {}) };
   }
   state.source = readPobSource(data.source);
+  const lastImport = data.lastImport;
+  if (record(lastImport) && typeof lastImport.at === 'string' && Number.isFinite(Date.parse(lastImport.at))
+    && ['equipmentChanges', 'formatOnly', 'newlyRead', 'informationChanges'].every((key) => typeof lastImport[key] === 'number' && Number.isInteger(lastImport[key]) && lastImport[key] >= 0 && lastImport[key] <= 50)) {
+    state.lastImport = { at: lastImport.at, equipmentChanges: lastImport.equipmentChanges as number, formatOnly: lastImport.formatOnly as number,
+      newlyRead: lastImport.newlyRead as number, informationChanges: lastImport.informationChanges as number };
+  }
+  if (Array.isArray(data.socketEvidence)) state.socketEvidence = data.socketEvidence.slice(0, 50).flatMap((entry) => {
+    if (!record(entry) || typeof entry.itemText !== 'string' || entry.itemText.length > 100_000 || typeof entry.filled !== 'number') return [];
+    const item = parseEquipment(entry.itemText);
+    return item && knownFilledSockets({ ...state, socketEvidence: undefined }, item, entry.filled) !== undefined ? [{ itemText: entry.itemText, filled: entry.filled, ...(entry.assumed === true ? { assumed: true } : {}) }] : [];
+  });
   const quotes = readLoadoutQuotes(data.quotes, state.slots);
   if (Object.keys(quotes).length) state.quotes = quotes;
   if (record(data.previous) && typeof data.previous.replacedAt === 'string' && Number.isFinite(Date.parse(data.previous.replacedAt))) {
-    const previous = deserializeLoadout(JSON.stringify({ version: 1, slots: data.previous.slots }));
-    if (previous.state) state.previous = { slots: previous.state.slots, source: readPobSource(data.previous.source), replacedAt: data.previous.replacedAt };
+    const previous = deserializeLoadout(JSON.stringify({ version: 1, slots: data.previous.slots, weaponSets: data.previous.weaponSets }));
+    if (previous.state) state.previous = { slots: previous.state.slots, weaponSets: previous.state.weaponSets, source: readPobSource(data.previous.source), replacedAt: data.previous.replacedAt };
+    if (state.previous && record(data.previous.after)) {
+      const after = deserializeLoadout(JSON.stringify({ version: 1, slots: data.previous.after.slots, weaponSets: data.previous.after.weaponSets }));
+      if (after.state) state.previous.after = { slots: after.state.slots, weaponSets: after.state.weaponSets };
+    }
   }
   return { state, error: '' };
 }

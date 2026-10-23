@@ -9,6 +9,8 @@ import { extractTradeActualStats } from './tradeActualValues';
 import { buildTradePseudoRows, tradePseudoKind } from './tradePseudo';
 import { buildTopGearRows, type TopGearGrade } from './tradeTopGear';
 import { PriceEstimate, type PriceEstimateProps } from './PriceEstimate';
+import LeaguePicker from './LeaguePicker';
+import PresetNumberInput from './PresetNumberInput';
 
 type SearchSource = 'current' | 'target' | 'base';
 type Preset = 'similar' | 'loose' | 'strict' | 'top' | 'custom';
@@ -90,7 +92,7 @@ function TradeContext(props: TradePanelProps) {
   return <div className="wb-trade-search">
     <div className="wb-section-head"><div><span className="wb-eyebrow">OFFICIAL TRADE</span><h3>选核心属性，查相似装备。</h3></div><span className="wb-tag">可调整条件</span></div>
     <p className="wb-description">先比较关键属性，再逐步收紧条件。每条属性都能勾选和调整数值，生成的链接会直接打开官方交易页。</p>
-    <label className="wb-form-label">交易赛季<input aria-label="交易赛季" list="wb-leagues" value={props.league} placeholder="填写官网赛季名称" onChange={(event) => props.onLeague(event.target.value)} /><datalist id="wb-leagues">{props.leagues.map((row) => <option key={row.id} value={row.id}>{row.label}</option>)}</datalist></label>
+    <LeaguePicker label="交易赛季" value={props.league} leagues={props.leagues} onChange={props.onLeague} />
     {props.leagueError && <p className="wb-fine">{props.leagueError}</p>}
     {props.league && props.priceLeague && props.league !== props.priceLeague && <p className="wb-inline-warning">搜索赛季与内置价格赛季不同。制作成本仍按价格表计算，请在“数据与价格”中调整。</p>}
     <div className="wb-trade-types">{([
@@ -129,7 +131,7 @@ function TradeSearchEditor({ data, tradeData, item, baseName, league, initialRow
       ...(limitLevel ? {
         ...(levelMin.trim() ? { itemLevelMin: Number(levelMin) } : {}),
         ...(levelMax.trim() ? { itemLevelMax: Number(levelMax) } : {}),
-      } : {}), rows, status, rarity, matching, minMatches: Number(minMatches) });
+      } : {}), rows, status, rarity, matching, minMatches: Math.min(Number(minMatches), Math.max(1, activeCount)) });
   } catch (reason) { error = reason instanceof Error ? reason.message : String(reason); }
 
   function applyPreset(next: Exclude<Preset, 'custom'>) {
@@ -186,16 +188,28 @@ function TradeSearchEditor({ data, tradeData, item, baseName, league, initialRow
       <label className="wb-trade-status">稀有度<select aria-label="交易稀有度" value={rarity} onChange={(event) => setRarity(event.target.value as typeof rarity)}><option value="nonunique">非传奇</option><option value="normal">普通（白色）</option><option value="magic">魔法（蓝色）</option><option value="rare">稀有（黄色）</option></select></label>
       <label className="wb-trade-status">卖家状态<select aria-label="卖家状态" value={status} onChange={(event) => setStatus(event.target.value as typeof status)}><option value="any">全部挂单（查价）</option><option value="online">在线卖家</option><option value="securable">可即时交易</option></select></label>
     </div>
-    {limitLevel && <div className="wb-trade-level"><label>最低物等<input aria-label="交易最低物等" type="number" min="1" max="100" value={levelMin} onChange={(event) => setLevelMin(event.target.value)} /></label><label>最高物等<input aria-label="交易最高物等" type="number" min="1" max="100" placeholder="不限" value={levelMax} onChange={(event) => setLevelMax(event.target.value)} /></label></div>}
+    {limitLevel && <div className="wb-trade-level"><PresetNumberInput label="交易最低物等" min={1} max={100} value={levelMin} onChange={setLevelMin} automaticLabel="不限制物等" presets={[{ value: String(item.level), label: `当前底材 · ${item.level}` }, ...[1, 2, 3].flatMap((tier) => {
+      const mods = [...new Set(rows.filter((row) => row.enabled && row.modId).map((row) => row.modId!))].flatMap((id) => data.mods.get(id) ?? []);
+      if (!mods.length || mods.some((mod) => mod.tiers.length < tier)) return [];
+      const level = Math.max(...mods.map((mod) => mod.tiers.at(-tier)!.ilvl));
+      return [{ value: String(level), label: `已选词缀 T${tier} 所需物等 · ${level}` }];
+    })].filter((entry, index, all) => all.findIndex((other) => other.value === entry.value) === index)} /><PresetNumberInput label="交易最高物等" min={1} max={100} value={levelMax} onChange={setLevelMax} automaticLabel="不限制物等" presets={[{ value: String(item.level), label: `当前底材 · ${item.level}` }]} /></div>}
     {rows.length > 0 && <>
       <div className="wb-trade-filter-head"><strong>参与搜索的属性 <span className="wb-count">{activeCount} / {rows.length}</span></strong><button className="wb-text-button" onClick={() => { setRows((old) => old.map((row) => ({ ...row, enabled: false }))); setPreset('custom'); }}>清空属性条件</button></div>
       <div className="wb-trade-filters">{rows.map((row) => { const reference = topMode ? topReference?.references.get(row.key) : undefined; return <div key={row.key} className={`wb-trade-filter ${row.enabled ? 'enabled' : ''}`} data-filter-key={row.key} data-mod-id={row.modId} data-origin={row.origin}>
         <label className="wb-trade-filter-label"><input type="checkbox" checked={row.enabled} disabled={!row.ids.length} aria-label={`搜索属性：${row.label}`} onChange={(event) => editRow(row.key, { enabled: event.target.checked })} /><span><strong>{row.label}</strong><small>{row.origin === 'pseudo' ? '合计属性' : row.origin === 'actual' ? `装备实际值 ${numberText(row.actualValue!)}` : source === 'target' ? '目标阶层下限' : '阶层下限（缺少实际值）'}{row.modId && (data.mods.get(row.modId)?.source === 'desecrated' || source === 'current' && [...item.prefixes, ...item.suffixes].some((entry) => entry.modId === row.modId && entry.desecrated)) ? ' · 亵渎' : ''}</small></span></label>
-        <div className="wb-trade-bounds"><label>下限<input aria-label={`${row.label} 下限`} type="number" step="any" placeholder="不限" value={row.min} onChange={(event) => editRow(row.key, { min: event.target.value })} /></label><label>上限<input aria-label={`${row.label} 上限`} type="number" step="any" placeholder="不限" value={row.max} onChange={(event) => editRow(row.key, { max: event.target.value })} /></label></div>
+        <div className="wb-trade-bounds"><PresetNumberInput label={`${row.label} 下限`} caption="数值档位" value={row.min} automaticLabel="不限制数值" onChange={(value) => editRow(row.key, { min: value })} presets={[
+          ...(row.actualValue !== undefined && row.actualValue >= 0 ? [{ value: numberText(row.actualValue), label: '当前装备数值' }] : []),
+          ...(['t2', 't1', 'high', 'perfect'] as const).flatMap((grade) => {
+            if (!tradeData) return [];
+            const ref = buildTopGearRows(data, tradeData, [{ ...row, enabled: true }], { grade, keepCurrent: false }).references.get(row.key);
+            return ref?.value !== undefined && !ref.note ? [{ value: numberText(ref.value), label: ref.label }] : [];
+          }),
+        ].filter((entry, index, all) => all.findIndex((other) => other.value === entry.value) === index)} /><PresetNumberInput label={`${row.label} 上限`} caption="额外上限" value={row.max} automaticLabel="不限制上限" onChange={(value) => editRow(row.key, { max: value })} presets={[]} /></div>
         {reference && <p className="wb-trade-top-reference">{reference.label}{reference.value !== undefined ? ` · 参考下限 ${numberText(reference.value)}` : ''}{reference.note ? ` · ${reference.note}` : ''}</p>}
         {row.warning && <p className="wb-trade-filter-warning">{row.warning}</p>}
       </div>; })}</div>
-      <div className="wb-trade-matching"><label>属性匹配<select aria-label="属性匹配" value={matching} onChange={(event) => setMatching(event.target.value as typeof matching)}><option value="all">满足全部已勾选属性</option><option value="count">至少满足其中几项</option></select></label>{matching === 'count' && <label>至少满足<input aria-label="至少满足属性数" type="number" min="1" max={activeCount} value={minMatches} onChange={(event) => setMinMatches(event.target.value)} /> 项</label>}</div>
+      <div className="wb-trade-matching"><label>属性匹配<select aria-label="属性匹配" value={matching} onChange={(event) => setMatching(event.target.value as typeof matching)}><option value="all">满足全部已勾选属性</option><option value="count">至少满足其中几项</option></select></label>{matching === 'count' && <label>至少满足<select aria-label="至少满足属性数" value={Math.min(Number(minMatches), Math.max(1, activeCount))} onChange={(event) => setMinMatches(event.target.value)}>{Array.from({ length: Math.max(1, activeCount) }, (_, index) => <option key={index} value={index + 1}>{index + 1} / {activeCount} 项</option>)}</select></label>}</div>
       <div className="wb-actions"><button className="wb-button" onClick={relax}>放宽数值与底座限制</button><button className="wb-text-button" onClick={() => { setRows((old) => old.map((row) => ({ ...row, min: '', max: '' }))); setPreset('custom'); }}>只要求属性存在</button></div>
       <p className="wb-fine">附加伤害的交易数值为最小值和最大值的平均数。下限与上限留空时，只要求存在该属性。品质加成直接采用复制文本中的显示值。</p>
     </>}

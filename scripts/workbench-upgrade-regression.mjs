@@ -33,7 +33,7 @@ try {
   await page.getByRole('button', { name: '识别并导入', exact: false }).click();
   const panel = page.getByRole('region', { name: '全物品查价' });
   await panel.getByRole('button', { name: /综合找升级/ }).click();
-  await panel.getByLabel('升级预算上限').fill('25');
+  await panel.getByLabel('升级预算上限档位').selectOption('25');
   const queryOf = async () => JSON.parse(new URL(await panel.getByRole('link', { name: '打开升级候选搜索', exact: true }).getAttribute('href')).searchParams.get('q'));
   const query = await queryOf();
   assert.deepEqual(query.sort, { 'statgroup.0': 'desc' });
@@ -45,9 +45,11 @@ try {
   await expect(panel.getByText('#1 Balanced Boots', { exact: true })).toBeVisible();
   await expect(panel.getByText(/有取舍，含下降属性/)).toBeVisible();
   console.log('PASS official weighted sorting, budget and current-direction tradeoffs replace uniform 10% floors');
-  const lifeWeight = panel.locator('input[aria-label$="权重"]').filter({ visible: true });
+  await panel.locator('.wb-search-conditions > summary').click();
+  const lifeWeight = panel.locator('input[aria-label$="权重"]');
   const namedLife = panel.locator('input[aria-label*="生命"][aria-label$="权重"]');
   assert(await lifeWeight.count() >= 3);
+  await namedLife.locator('xpath=ancestor::details[1]').locator(':scope > summary').click();
   await namedLife.fill('10');
   await panel.getByRole('button', { name: '搜索市场综合候选' }).click();
   await expect(panel.getByText('#1 Life Boots', { exact: true })).toBeVisible();

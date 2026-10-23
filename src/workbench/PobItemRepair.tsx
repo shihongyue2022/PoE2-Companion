@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { POB_REVIEW_MARKER, readOriginalLocalPob, repairPobEquipment } from './pobRepair';
 import type { LoadoutContext } from './loadoutIntegration';
+import { activeSecondWeapons } from './weaponSets';
 
 export default function PobItemRepair({ raw, context, onRepair, auto = false }: { raw: string; context?: LoadoutContext; onRepair: (raw: string) => void; auto?: boolean }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
@@ -24,7 +25,7 @@ export default function PobItemRepair({ raw, context, onRepair, auto = false }: 
       const xml = file ? await file.text() : context?.state.source ? await readOriginalLocalPob(context.state.source, task.signal) : '';
       if (task.signal.aborted) return;
       if (!xml) throw new Error('请选择原 PoB2 XML 文件。');
-      const fixed = repairPobEquipment(xml, raw, context ? { slot: context.slot, source: context.state.source } : undefined);
+      const fixed = repairPobEquipment(xml, raw, context ? { slot: context.slot, source: context.state.source ? { ...context.state.source, secondWeapons: activeSecondWeapons(context.state) } : undefined } : undefined);
       if (fixed.raw === raw) { setNotice(`原文件仍有 ${fixed.remaining} 条数值需要核对。请复制游戏文本确认，不会强行移除标记。`); return; }
       onRepair(fixed.raw);
     } catch (reason) { if (!task.signal.aborted) setError(reason instanceof Error ? reason.message : '重新识别失败。'); }

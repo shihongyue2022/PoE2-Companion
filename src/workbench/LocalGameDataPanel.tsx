@@ -3,6 +3,7 @@ import type { LocalGameData } from './gameData';
 import { translatePobLabel } from './localization';
 import { BUILD_FAMILIES, isBuildMainSkill, profileForSkill, type BuildAnalysis, type BuildProfile } from './buildProfile';
 import { localizeEquipmentName, localizeEquipmentStat } from './genericEquipment';
+import PresetNumberInput, { budgetPresets } from './PresetNumberInput';
 
 export default function LocalGameDataPanel({ characterLevel, onBuild }: { characterLevel?: number; onBuild?: (profile: BuildProfile) => void }) {
   const [data, setData] = useState<LocalGameData | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -55,7 +56,7 @@ export default function LocalGameDataPanel({ characterLevel, onBuild }: { charac
         {config.activeFilter && <p>当前掉落过滤器：{config.activeFilter}（只读配置，不修改过滤规则或音效）。</p>}
       </div>}
       {!!data?.plans.length && <div><h4>游戏内保存的规划方案</h4><p className="lo-footnote">这些是参考天赋／技能方案，不能当作当前已穿戴装备或角色实时状态；整套装备仍从 PoB2 导入。</p>
-        <div className="lo-actions"><label>分析等级<input aria-label="BD 分析等级" type="number" min="1" max="100" placeholder={String(characterLevel ?? 100)} value={level} disabled={busy} onChange={(event) => { setLevel(event.target.value); setAnalysis(null); }} /></label>
+        <div className="lo-actions"><PresetNumberInput label="BD 分析等级" value={level} min={1} max={100} disabled={busy} automaticLabel={characterLevel ? `跟随当前角色 · ${characterLevel} 级` : '参考完整 100 级规划'} presets={budgetPresets([80, 85, 90, 95, 100])} onChange={(value) => { setLevel(value); setAnalysis(null); }} />
           <label>分析武器组<select aria-label="BD 分析武器组" value={weaponSet} disabled={busy} onChange={(event) => { setWeaponSet(Number(event.target.value)); setAnalysis(null); }}><option value={1}>第一组</option><option value={2}>第二组</option></select></label></div>
         <ul>{data.plans.map((plan) => <li key={plan.fileName}>
         <strong>{plan.fileName}</strong> · {plan.name}{plan.author ? ` · 作者 ${plan.author}` : ''}{plan.ascendancy ? ` · ${translatePobLabel(plan.ascendancy)}` : ''}<br />

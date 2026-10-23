@@ -23,6 +23,7 @@ try {
   await tracker.getByRole('button', { name: '读取最近 30 天日志' }).click();
   await expect(tracker.getByText(candidate.item, { exact: true })).toBeVisible();
   await expect(cards).toHaveText(['0', '0', '0']);
+  await tracker.getByText('更正这笔成交', { exact: true }).click();
   await tracker.getByLabel(`${candidate.item}实际成交数量`).fill('10');
   await tracker.getByRole('button', { name: '确认成交', exact: true }).click();
   await expect(cards).toHaveText(['10', '0', '10']);

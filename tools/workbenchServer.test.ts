@@ -15,6 +15,11 @@ const json = (value: unknown, status = 200, headers: Record<string, string> = {}
 const item = (amount: number, currency = 'exalted', account = String(amount)) => ({ id: String(amount), listing: { price: { amount, currency }, account: { name: account } } });
 
 describe('official market estimate service', () => {
+  it('preserves a verified property sort rather than silently returning cheap-price results', () => {
+    const weapon = { ...search, query: { ...search.query, filters: { ...search.query.filters, type_filters: { filters: { category: { option: 'weapon.spear' } } } } }, sort: { pdps: 'desc' } };
+    expect(validateEstimate({ league: 'Test', search: weapon }).search.sort).toEqual({ pdps: 'desc' });
+    expect(() => validateEstimate({ league: 'Test', search: { ...search, sort: { pdps: 'desc' } } })).toThrow('武器');
+  });
   it('stops SSE heartbeats immediately on shutdown or finish before a socket close event', async () => {
     vi.useFakeTimers();
     try {

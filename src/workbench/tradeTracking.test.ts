@@ -48,4 +48,12 @@ describe('trade tracking with explicit confirmation', () => {
     expect(collectTrades(state, [proposal('new')])).toBe(state);
     expect(readFinance(JSON.stringify(state)).tradeInbox?.[0]?.id).toBe('existing-0');
   });
+  it('adds acceptance evidence arriving in a later poll without changing the quoted amount or confirming cashflow', () => {
+    const event = proposal(), initial = collectTrades(emptyFinance(), [event]);
+    const acceptedAt = '2026-10-18T01:22:00Z';
+    const next = collectTrades(initial, [{ ...event, acceptedAt }]);
+    expect(next.tradeInbox).toHaveLength(1); expect(next.tradeInbox![0]!.acceptedAt).toBe(acceptedAt);
+    expect(next.entries).toHaveLength(0); expect(collectTrades(next, [{ ...event, acceptedAt }])).toBe(next);
+    expect(collectTrades(initial, [{ ...event, amount: 999, acceptedAt }])).toBe(initial);
+  });
 });

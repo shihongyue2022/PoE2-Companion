@@ -24,6 +24,7 @@ const copyItem = (item: ExistingItem): ExistingItem => ({
 const initialMode = (action?: string): CraftCheckpoint['mode'] => /Annul|剥离/i.test(action ?? '') ? 'remove'
   : /Exalt|崇高|Augment|增幅|Regal|富豪|Transmut|蜕变/i.test(action ?? '') ? 'add' : action ? 'goals' : 'remove';
 const defaultAction: Readonly<Record<CraftCheckpoint['mode'], string>> = { remove: '剥离石', add: '崇高石', goals: '混沌石' };
+const actionChoices = ['剥离石', '崇高石', '高阶崇高石', '完美崇高石', '增幅石', '高阶增幅石', '完美增幅石', '富豪石', '高阶富豪石', '完美富豪石', '蜕变石', '高阶蜕变石', '完美蜕变石', '混沌石', '高阶混沌石', '完美混沌石', '点金石'];
 const defaultPreserves = (item: ExistingItem, targets: readonly TargetInput[]): string[] => [
   ...new Set([...item.prefixes, ...item.suffixes].filter((entry) => entry.fractured
     || targets.some((target) => target.modId === entry.modId && entry.tierDisplay <= target.tierDisplay)).map((entry) => entry.modId)),
@@ -105,7 +106,8 @@ function CheckpointBody({
           const next = event.target.value as CraftCheckpoint['mode'];
           setMode(next); setAction(defaultAction[next]);
         }}><option value="remove">移除一条指定词缀</option><option value="add">增加一条目标词缀</option><option value="goals">达成指定阶段目标</option></select></label>
-        <label>计划使用的通货<input aria-label="计划使用的通货" value={action} onChange={(event) => setAction(event.target.value)} /></label>
+        <label>计划使用的通货<select aria-label="计划使用的通货" value={action} onChange={(event) => setAction(event.target.value)}>{[...new Set([action, ...actionChoices])].filter(Boolean).map((label) => <option key={label} value={label}>{label}</option>)}</select></label>
+        <details><summary>自定义通货组合／备注（高级）</summary><input aria-label="自定义通货组合" value={action} onChange={(event) => setAction(event.target.value)} /></details>
       </div>
 
       {mode === 'remove' ? <fieldset className="wb-checkpoint-choices"><legend>本步允许移除的词缀（任选其一）</legend>

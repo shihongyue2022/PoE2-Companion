@@ -1,0 +1,50 @@
+import { chromium, expect } from '@playwright/test';
+import assert from 'node:assert/strict';
+import { mkdir, readFile } from 'node:fs/promises';
+const xml = process.env.POB_BUILD_FILE ? await readFile(process.env.POB_BUILD_FILE, 'utf8') : undefined;
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
+const errors = []; page.on('pageerror', (error) => errors.push(error.message));
+try {
+  let testXml;
+  await page.route('**/api/workbench/pob/builds', (route) => route.fulfill({ json: { ok: true, installed: true, builds: [{ id: 'a'.repeat(64), name: 'Current.xml', modifiedAt: '2026-10-23T00:00:00Z' }] } }));
+  await page.route('**/api/workbench/pob/build', (route) => route.fulfill({ json: { ok: true, name: 'Current.xml', modifiedAt: '2026-10-23T00:00:00Z', xml: testXml } }));
+  await page.goto(process.env.WORKBENCH_URL ?? 'http://127.0.0.1:5173/?companion=1');
+  const expected = await page.evaluate(async (input) => {
+    const { dualWeaponsXml } = await import('/src/workbench/fixtures/dualWeapons.ts');
+    const { parsePobXml, previewPob, pobImportSource } = await import('/src/workbench/pobImport.ts');
+    const { applyPobLoadout } = await import('/src/workbench/loadoutIntegration.ts');
+    const { emptyLoadout, serializeLoadout } = await import('/src/workbench/loadout.ts');
+    const { parseEquipment } = await import('/src/workbench/genericEquipment.ts');
+    const text = input ?? dualWeaponsXml, document = parsePobXml(text), id = document.activeSet;
+    const first = previewPob(document, id, false), second = previewPob(document, id, true);
+    const source = pobImportSource(document, id, false, first.slots, { name: 'Current.xml', modifiedAt: '2026-10-23T00:00:00Z' });
+    const state = applyPobLoadout(emptyLoadout(), first.slots, source);
+    delete state.weaponSets; delete state.source.weaponSets; // Exercise legacy recovery, not just new import.
+    localStorage.setItem('poe2-workbench-loadout-v1', serializeLoadout(state));
+    const label = (raw) => parseEquipment(raw ?? '')?.name ?? '未装备';
+    return { xml: text, firstMain: label(first.slots.mainHand), firstOff: label(first.slots.offHand), secondMain: label(second.slots.mainHand), secondOff: label(second.slots.offHand), shared: Object.fromEntries(Object.entries(first.slots).filter(([key]) => !['mainHand', 'offHand'].includes(key))) };
+  }, xml);
+  testXml = expected.xml;
+  await page.reload();
+  const loadout = page.getByRole('region', { name: '角色全身装备' }), controls = loadout.getByRole('group', { name: '当前武器组' });
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('poe2-workbench-loadout-v1')).weaponSets?.second.offHand)).not.toBeUndefined();
+  await controls.getByRole('button', { name: /武器组 II/ }).click();
+  await expect(loadout.getByRole('button', { name: `主手：${expected.secondMain}`, exact: true })).toBeVisible();
+  await expect(loadout.getByRole('button', { name: `副手：${expected.secondOff}`, exact: true })).toBeVisible();
+  await expect(controls.getByRole('button', { name: /武器组 II/ })).toHaveAttribute('aria-pressed', 'true');
+  const shared = await page.evaluate(() => Object.fromEntries(Object.entries(JSON.parse(localStorage.getItem('poe2-workbench-loadout-v1')).slots).filter(([key]) => !['mainHand', 'offHand'].includes(key))));
+  assert.deepEqual(shared, expected.shared);
+  await mkdir('artifacts/workbench', { recursive: true });
+  await loadout.locator('.lo-inventory-column').screenshot({ path: 'artifacts/workbench/weapon-set-II-desktop.png' });
+  await page.reload();
+  await expect(controls.getByRole('button', { name: /武器组 II/ })).toHaveAttribute('aria-pressed', 'true');
+  await controls.getByRole('button', { name: /^武器组 I\s/ }).click();
+  await expect(loadout.getByRole('button', { name: `主手：${expected.firstMain}`, exact: true })).toBeVisible();
+  await expect(loadout.getByRole('button', { name: `副手：${expected.firstOff}`, exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await controls.screenshot({ path: 'artifacts/workbench/weapon-sets-mobile.png' });
+  assert.deepEqual(errors, []);
+  console.log(`PASS ${xml ? 'saved PoB2 file' : 'synthetic PoB2'}: legacy recovery, both hands, shared armour, persistent selection and responsive switch`);
+} finally { await browser.close(); }

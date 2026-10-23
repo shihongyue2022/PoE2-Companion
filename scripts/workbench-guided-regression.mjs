@@ -36,7 +36,7 @@ try {
   await page.getByText('通货范围与计算选项', { exact: true }).click();
   await page.getByRole('checkbox', { name: /同时抽样验证/ }).check();
   await advisor.locator(':scope > details.wb-fold > summary').click();
-  await page.getByLabel('追加材料预算').fill('0');
+  await page.getByLabel('追加材料预算档位').selectOption('0');
   const repair = advisor.locator('[data-candidate-id="repair"]');
   await repair.getByRole('button', { name: '单独评估此方案' }).click();
   await repair.locator('.wb-advisor-cost,[role="alert"]').first().waitFor({ timeout: 70_000 });
@@ -47,11 +47,13 @@ try {
   assert.match(await repair.innerText(), /抽样 P95/);
   check('real Worker computes protected-fracture improvement cost and sampled P95, then judges zero additional budget');
 
-  await page.getByLabel('追加材料预算').fill('1000000000');
+  await page.getByLabel('追加材料预算档位').selectOption('custom');
+  await page.getByLabel('追加材料预算', { exact: true }).fill('1000000000');
   assert.match(await repair.innerText(), /可考虑继续制作/);
   const restart = repair.locator('.wb-restart-comparison');
-  await restart.locator('summary').click();
+  await restart.locator(':scope > summary').click();
   await restart.getByRole('textbox').fill(finished);
+  await restart.getByText('核对／更正实际买价（高级）', { exact: true }).click();
   await restart.getByRole('spinbutton').fill('0');
   await restart.getByRole('button', { name: '计算更换底材成本' }).click();
   await restart.getByText('更换底材的期望追加成本较低', { exact: true }).waitFor({ timeout: 70_000 });

@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "PoE2 工坊 · 官方成交同步",
+  "version": "1.0.0",
+  "description": "在你正常登录的 PoE2 官网读取近期成交，发送到本机工坊。无需提供 Cookie 或口令。",
+  "host_permissions": ["https://www.pathofexile.com/*", "http://127.0.0.1:5173/*", "http://localhost:5173/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    { "matches": ["https://www.pathofexile.com/trade2/history*"], "js": ["official.js"] },
+    { "matches": ["http://127.0.0.1:5173/*", "http://localhost:5173/*"], "js": ["workbench.js"] }
+  ]
+}

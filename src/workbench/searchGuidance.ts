@@ -1,5 +1,5 @@
 import { matchEquipmentStat, type Equipment, type EquipmentMod } from './genericEquipment';
-import type { EquipmentT1Result } from './equipmentT1';
+import type { EquipmentT1Result, EquipmentT1Reference } from './equipmentT1';
 import type { AffixReferenceResult } from './affixReference';
 import type { EquipmentTradeRow } from './genericEquipmentTrade';
 
@@ -10,6 +10,7 @@ export interface RollGuide {
   tierFloor?: { min?: number; max?: number }; lowerIsBetter: boolean;
   source?: string; note: string; safe: boolean;
   unique?: boolean;
+  tiers?: EquipmentT1Reference['tiers'];
 }
 export function automaticUtilityRows(rows: EquipmentTradeRow[], equipment: Equipment) {
   return rows.map((row) => {
@@ -62,10 +63,11 @@ export function rollGuides(equipment: Equipment, t1?: EquipmentT1Result | null, 
     const tierFloor = tier?.status === 't1' ? { min: tier.min, max: tier.max } : undefined;
     return [`mod:${mod.key}`, { current, top, currentPercent, tierFloor, lowerIsBetter,
       source: equipment.rarity === 'unique' && current ? '传奇英文资料／游戏复制范围' : top ? `底座词池 ${t1?.patch}` : current ? '游戏高级复制范围' : undefined,
-      safe, note, unique: equipment.rarity === 'unique' }];
+      safe, note, unique: equipment.rarity === 'unique', tiers: tier?.tiers }];
   }));
-  for (const row of rows) if (row.targetRange && !result.has(row.key)) result.set(row.key, { top: row.targetRange, tierFloor: row.targetFloor, lowerIsBetter: false,
-    safe: !(equipment.quality && ['ring', 'amulet'].includes(equipment.slot)), source: `底座词池 ${row.targetPatch ?? ''}`, note: row.suggested ? 'BD 潜在属性，当前未拥有；参与候选排序，不强制所有潜在词缀同时出现。' : '' });
+  for (const row of rows) if (row.targetRange && (!result.has(row.key) || !result.get(row.key)?.top)) result.set(row.key, { ...result.get(row.key), top: row.targetRange, tierFloor: row.targetFloor, lowerIsBetter: row.targetFloor?.max !== undefined,
+    tiers: row.targetTiers,
+    safe: !(equipment.quality && ['ring', 'amulet'].includes(equipment.slot)), source: `底座词池 ${row.targetPatch ?? ''}`, note: row.suggested ? row.key.startsWith('need:') ? '补齐推荐属性，当前未拥有；已用抗性合计保证底线，勾选本条可进一步限定补齐方式。' : 'BD 潜在属性，当前未拥有；参与候选排序，不强制所有潜在词缀同时出现。' : '' });
   return result;
 }
 const tidy = (value: number) => String(Math.round(value * 1e6) / 1e6);

@@ -7,6 +7,7 @@ import { computeWorkbench } from './compute';
 import { parseWorkbenchItem } from './itemImport';
 import { formatCost, makeSolveRequest, type CraftOptions } from './model';
 import { compareRestartCost } from './restartCost';
+import { listedPrice } from './listedPrice';
 
 export interface RestartComparisonProps {
   engine: Engine;
@@ -49,7 +50,8 @@ function RestartComparisonBody(props: RestartComparisonProps) {
   const generation = useRef(0);
   const runner = useRef<ReturnType<typeof computeWorkbench> | null>(null);
   const busyCallback = useRef(props.onBusyChange);
-  const buyPrice = parseAmount(priceText);
+  const quoted = listedPrice(raw, props.engine.prices.currency, props.overrides);
+  const buyPrice = parseAmount(priceText) ?? quoted?.exalted;
 
   const replacement = useMemo((): { item?: ExistingItem; name?: string; error?: string } => {
     if (!raw.trim()) return {};
@@ -128,13 +130,14 @@ function RestartComparisonBody(props: RestartComparisonProps) {
     <p>粘贴准备购买的另一件底材，按上方完全相同的目标重新求解；使用它实际带有的词缀、物等与破裂状态。</p>
     <label>替代底材的完整装备文本<textarea rows={6} aria-label={`${props.candidate.title} 替代底材文本`}
       value={raw} disabled={busy || props.disabled} placeholder="从游戏或官网复制另一件底材，粘贴到这里"
-      onChange={(event) => { reset(); setRaw(event.target.value); }} /></label>
-    <label>替代底材买价 · Ex<input type="number" min="0" step="any" aria-label={`${props.candidate.title} 替代底材买价`}
+      onChange={(event) => { reset(); setRaw(event.target.value); setPriceText(''); }} /></label>
+    {quoted && <p className="wb-fine">已读取装备报价：{quoted.amount} {quoted.unit}{quoted.exalted === undefined ? '；当前没有可核对的 Ex 汇率，请核对精确买价。' : `，按当前材料价格折合 ${formatCost(quoted.exalted)} Ex` }。仅为复制时的挂牌报价。</p>}
+    <details open={needsWhitePrice}><summary>核对／更正实际买价（高级）</summary><label>替代底材买价 · Ex<input type="number" min="0" step="any" aria-label={`${props.candidate.title} 替代底材买价`}
       value={priceText} disabled={busy || props.disabled} placeholder="填写实际挂单买价"
       onChange={(event) => {
         if (replacement.item?.rarity === 'normal') reset();
         setPriceText(event.target.value);
-      }} /></label>
+      }} /></label></details>
     {replacement.error && <p className="wb-inline-warning" role="alert">{replacement.error}</p>}
     {replacement.item && <p className="wb-fine">已确认 {replacement.name}，物等 {replacement.item.level}，
       {replacement.item.prefixes.length + replacement.item.suffixes.length} 条现有词缀，{fractured} 条破裂锁定。</p>}

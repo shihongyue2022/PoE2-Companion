@@ -7,17 +7,47 @@ import { readLoadoutQuotes } from './loadoutQuotes';
 import type { Currency } from './finance';
 import { buildModWeight } from './buildAdvice';
 import { damageGoalRows, resistanceQueryRows, usesDamageGoal } from './damageGoal';
+import { activeSecondWeapons, activeWeaponSet, syncWeaponSets } from './weaponSets';
+import { equipmentRevision, revisionMetrics, revisionWeaponPair } from './equipmentRevision';
 
 export function applyPobLoadout(current: LoadoutState, slots: LoadoutState['slots'], source?: PobSource): LoadoutState {
-  return { ...current, slots, character: undefined, source, quotes: readLoadoutQuotes(current.quotes, slots),
-    previous: Object.keys(current.slots).length ? { slots: current.slots, source: current.source, replacedAt: new Date().toISOString() } : undefined };
+  const at = new Date().toISOString();
+  const next = syncWeaponSets({ ...current, slots, weaponSets: source?.weaponSets ? { ...source.weaponSets, active: source.secondWeapons ? 2 : 1 } : undefined,
+    character: undefined, socketEvidence: undefined, source, quotes: readLoadoutQuotes(current.quotes, slots) });
+  const changes = loadoutChanges(current, next), equipmentChanges = changes.slots.filter((row) => ['added', 'removed', 'modified'].includes(row.revision.status)).length;
+  const shouldRecord = equipmentChanges > 0 || !current.previous && changes.slots.length > 0;
+  return { ...next,
+    lastImport: { at, equipmentChanges, formatOnly: changes.formatOnly, newlyRead: changes.slots.filter((row) => row.revision.status === 'newly-read').length,
+      informationChanges: changes.slots.filter((row) => row.revision.status === 'information').length },
+    previous: Object.keys(current.slots).length && shouldRecord ? { slots: current.slots, weaponSets: syncWeaponSets(current).weaponSets, source: current.source, replacedAt: at,
+      after: { slots: next.slots, weaponSets: next.weaponSets } } : current.previous };
 }
 export function loadoutChanges(before: LoadoutState, after: LoadoutState) {
   const totalsBefore = loadoutTotals(before), totalsAfter = loadoutTotals(after);
+  interface RevisionSlot { id: LoadoutSlot; label: string; kind: string; key: string; beforeRaw?: string; afterRaw?: string; beforeKnown: boolean; afterKnown: boolean }
+  const entries = LOADOUT_SLOTS.flatMap<RevisionSlot>((slot) => {
+    if (slot.id !== 'mainHand' && slot.id !== 'offHand') return [{ ...slot, key: slot.id, beforeRaw: before.slots[slot.id], afterRaw: after.slots[slot.id], beforeKnown: true, afterKnown: true }];
+    return ([1, 2] as const).map((number) => {
+      const a = revisionWeaponPair(before, number), b = revisionWeaponPair(after, number);
+      return { ...slot, label: `武器组 ${number === 1 ? 'I' : 'II'} · ${slot.label}`, key: `${number}:${slot.id}`, beforeRaw: a?.[slot.id], afterRaw: b?.[slot.id], beforeKnown: !!a, afterKnown: !!b };
+    });
+  }).map((slot) => ({ ...slot, revision: equipmentRevision(slot.beforeRaw, slot.afterRaw, slot.beforeKnown, slot.afterKnown) }));
+  const sameWeaponSet = activeWeaponSet(before) === activeWeaponSet(after);
   return {
-    slots: LOADOUT_SLOTS.flatMap((slot) => before.slots[slot.id] === after.slots[slot.id] ? [] : [{ ...slot,
-      before: parseEquipment(before.slots[slot.id] ?? '')?.name ?? '未装备', after: parseEquipment(after.slots[slot.id] ?? '')?.name ?? '未装备' }]),
-    metrics: METRICS.filter((metric) => !metric.key.endsWith('Dps')).map((metric) => ({ ...metric,
+    slots: entries.filter((row) => row.revision.status !== 'unchanged').map((row) => ({ ...row,
+      before: row.revision.before?.name ?? '未装备', after: row.revision.after?.name ?? '未装备',
+      metrics: (() => {
+        const values = revisionMetrics(row.revision.before, row.revision.after, row.beforeKnown);
+        return METRICS.flatMap((metric) => {
+          const a = values.beforePending.includes(metric.key) || !row.beforeKnown ? undefined : values.before[metric.key] ?? (row.revision.before ? undefined : 0);
+          const b = values.afterPending.includes(metric.key) || !row.afterKnown ? undefined : values.after[metric.key] ?? (row.revision.after ? undefined : 0);
+          if (a === b || a === undefined || b === undefined) return [];
+          return [{ ...metric, before: a, after: b, delta: Number((b - a).toFixed(6)) }];
+        });
+      })() })),
+    formatOnly: entries.filter((row) => row.revision.formatOnly).length,
+    sameWeaponSet,
+    metrics: (sameWeaponSet ? METRICS.filter((metric) => !metric.key.endsWith('Dps')) : []).map((metric) => ({ ...metric,
       before: totalsBefore[metric.key] ?? 0, after: totalsAfter[metric.key] ?? 0, delta: (totalsAfter[metric.key] ?? 0) - (totalsBefore[metric.key] ?? 0),
     })).filter((row) => Math.abs(row.delta) > 0.0001),
   };
@@ -44,7 +74,7 @@ export function loadoutUpgradeRows(rows: EquipmentTradeRow[], equipment: Equipme
     return row.enabled && !row.presenceOnly ? { ...row, weight: String(weight) } : row;
   });
 }
-export function sourceIsCurrent(state: LoadoutState): boolean { return !!state.source && state.source.equipmentSignature === equipmentSignature(state.slots); }
+export function sourceIsCurrent(state: LoadoutState): boolean { return !!state.source && state.source.secondWeapons === activeSecondWeapons(state) && state.source.equipmentSignature === equipmentSignature(state.slots); }
 export interface LoadoutAssetInput { itemKey: string; label: string; quantity: number; price: number | null; currency: Currency }
 export async function loadoutAssetInputs(state: LoadoutState, league: string, defaultCurrency: Currency): Promise<LoadoutAssetInput[]> {
   const grouped = new Map<string, LoadoutAssetInput>();

@@ -1,5 +1,8 @@
-import { equipmentMetricDetails, parseEquipment, type Equipment } from './genericEquipment';
+import type { Equipment } from './genericEquipment';
 import type { LoadoutSlot, LoadoutState, MetricKey, ResistanceKey } from './loadout';
+import { equipmentSignature, resistanceGate } from './resistanceModel';
+import { activeWeaponSet } from './weaponSets';
+export { equipmentSignature } from './resistanceModel';
 
 export interface CharacterPanelSnapshot {
   values: Partial<Record<MetricKey, number>>;
@@ -7,20 +10,18 @@ export interface CharacterPanelSnapshot {
   equipmentSignature: string;
   recordedAt: string;
   itemValues?: Partial<Record<MetricKey, number>>;
+  weaponSet?: 1 | 2;
 }
-export const equipmentSignature = (slots: LoadoutState['slots']) => JSON.stringify(Object.entries(slots).sort(([a], [b]) => a.localeCompare(b)));
 export function validCharacterPanel(state: LoadoutState): boolean {
-  return !!state.character && state.character.equipmentSignature === equipmentSignature(state.slots);
+  return !!state.character && (state.character.weaponSet ?? (state.source?.secondWeapons ? 2 : 1)) === activeWeaponSet(state) && state.character.equipmentSignature === equipmentSignature(state.slots);
 }
 export function projectCharacterResistances(state: LoadoutState, slot: LoadoutSlot, candidate: Equipment,
   context: { beforeFilledSockets?: number; afterFilledSockets?: number } = {}) {
-  if (!state.character || !validCharacterPanel(state)) return [];
-  const old = state.slots[slot];
-  if (!old) return [];
-  const previous = parseEquipment(old); if (!previous) return [];
-  const before = equipmentMetricDetails(previous, { filledSockets: context.beforeFilledSockets });
-  const after = equipmentMetricDetails(candidate, { filledSockets: context.afterFilledSockets });
-  return projectResistanceValues(state.character, before.values, after.values).filter((row) => !before.pending.includes(row.key) && !after.pending.includes(row.key));
+  return resistanceGate(state, slot, candidate, context).rows.flatMap((row) => row.before !== undefined && row.after !== undefined && row.cap !== undefined
+    && row.effectiveBefore !== undefined && row.effectiveAfter !== undefined && row.overflowBefore !== undefined && row.overflowAfter !== undefined ? [{
+      key: row.key, before: row.before, after: row.after, cap: row.cap, effectiveBefore: row.effectiveBefore, effectiveAfter: row.effectiveAfter,
+      effectiveDelta: row.effectiveAfter - row.effectiveBefore, overflowBefore: row.overflowBefore, overflowAfter: row.overflowAfter,
+    }] : []);
 }
 export function projectResistanceValues(snapshot: CharacterPanelSnapshot, beforeItem: Record<string, number>, afterItem: Record<string, number>) {
   return (['fireResistance', 'coldResistance', 'lightningResistance', 'chaosResistance'] as const).flatMap((key) => {

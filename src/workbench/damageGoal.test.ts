@@ -50,7 +50,7 @@ describe('capped resistance then damage objective', () => {
   });
   it('does not infer caps from unknown or stale baselines, effective-only data or changed cap mechanics', () => {
     const state = damageState(), candidate = parseEquipment(damageRing)!;
-    expect(resistanceGate({ ...state, slots: {} }, 'ring1', candidate).status).toBe('unknown');
+    expect(resistanceGate({ ...state, slots: {}, character: undefined, source: undefined }, 'ring1', candidate).status).toBe('unknown');
     const sourceOnly = { ...state, character: undefined, source: { ...state.source!, reference: { values: { fireResistance: 90 }, caps: {}, effective: { coldResistance: 75 } } } };
     expect(resistanceGate(sourceOnly, 'ring1', candidate).status).toBe('unknown');
     expect(resistanceGate(state, 'ring1', parseEquipment(`${damageRing}\n+1% to maximum Fire Resistance`)!).status).toBe('unknown');
@@ -71,7 +71,7 @@ describe('capped resistance then damage objective', () => {
     const xml = combatXml.replace('<Build level="87" mainSocketGroup="3">', '<Build level="87" mainSocketGroup="3"><PlayerStat stat="FireResist" value="80"/><PlayerStat stat="FireResistOverCap" value="20"/><PlayerStat stat="ColdResist" value="75"/><PlayerStat stat="ChaosResist" value="57"/><PlayerStat stat="ChaosResistOverCap" value="0"/>');
     const ref = parsePobXml(xml).profile!.reference!;
     expect(ref.values.fireResistance).toBe(100); expect(ref.caps.fireResistance).toBe(80);
-    expect(ref.values.coldResistance).toBeUndefined(); expect(ref.values.chaosResistance).toBeUndefined(); expect(ref.caps.chaosResistance).toBeUndefined();
+    expect(ref.values.coldResistance).toBeUndefined(); expect(ref.values.chaosResistance).toBe(57); expect(ref.caps.chaosResistance).toBeUndefined();
   });
   it('keeps a defensive-only slot searchable without inventing a life/resistance damage score', () => {
     const state = damageState(), boots = parseEquipment(BOOTS_SAMPLE)!;

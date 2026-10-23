@@ -6,6 +6,7 @@ import { TRADE_CATEGORY, type GearTrade } from '../lib/gearTrade';
 import { tradeLineRangeMapping } from './tradeSearch';
 import { referenceFor } from './equipmentT1';
 import type { EquipmentTradeRow } from './genericEquipmentTrade';
+import { activeSecondWeapons } from './weaponSets';
 
 export interface MainSkillSelection { source: 'bd' | 'pob'; setId?: string; group?: number; id?: string; name?: string }
 export interface SkillChoice { key: string; selection: MainSkillSelection; label: string }
@@ -20,7 +21,7 @@ export function mainSkillChoices(state: LoadoutState): SkillChoice[] {
   const choices: SkillChoice[] = [];
   if (state.goals.build) choices.push({ key: 'bd', selection: { source: 'bd' }, label: `参考 BD · ${state.goals.build.main.label}` });
   for (const set of state.source?.combat?.sets ?? []) for (const group of set.groups) {
-    const gem = activeGems(group, state.source?.secondWeapons ?? false).find((entry) => !gemInfo(entry).support);
+    const gem = activeGems(group, activeSecondWeapons(state)).find((entry) => !gemInfo(entry).support);
     if (!gem) continue;
     const info = gemInfo(gem);
     if (!info.tags.some((tag) => ['attack', 'spell', 'minion'].includes(tag)) || info.tags.includes('buff') || info.tags.includes('persistent') && !info.tags.includes('minion')) continue;
@@ -51,17 +52,17 @@ export function skillPlan(state: LoadoutState): SkillPlan | undefined {
     const set = combat.sets.find((entry) => entry.id === (selected?.setId ?? combat.activeSet));
     const group = set?.groups.find((entry) => entry.index === (selected?.group ?? combat.mainGroup));
     const gem = selected ? group?.gems.find((entry) => (entry.id || entry.skillId) === selected.id && entry.name === selected.name && !gemInfo(entry).support) : mainGem(combat);
-    if (!group || !gem || !activeGems(group, state.source?.secondWeapons ?? false).includes(gem)) return undefined;
+    if (!group || !gem || !activeGems(group, activeSecondWeapons(state)).includes(gem)) return undefined;
     const info = gemInfo(gem); if (!info.known) return undefined;
     name = info.name; label = info.label; tags = info.tags; weapon = info.weapon;
-    supports = activeGems(group, state.source?.secondWeapons ?? false).filter((entry) => gemInfo(entry).support).map((entry) => ({ name: gemInfo(entry).name, label: gemInfo(entry).label }));
+    supports = activeGems(group, activeSecondWeapons(state)).filter((entry) => gemInfo(entry).support).map((entry) => ({ name: gemInfo(entry).name, label: gemInfo(entry).label }));
     key = `pob:${set!.id}:${group.index}`; source = selected ? '你指定的 PoB2 主输出技能' : 'PoB2 保存的主技能';
   }
   const elements = tags.filter((tag) => Object.prototype.hasOwnProperty.call(elementNames, tag)), notes: string[] = [], warnings: string[] = [];
   // Exact, versioned PoB facts; never infer a conversion percentage from a skill's name/tag.
   if (name === 'Lightning Spear') notes.push('PoB2 v0.23.1 的闪电长矛主长矛部分有 80% 基础物理转闪电；物理可作为转伤来源，闪电标签不代表最终伤害占比。');
   const sameBd = fromBd || bd?.main.label === label;
-  const sameSavedSkill = !fromBd && (!selected || selected.group === combat?.mainGroup && selected.setId === combat?.activeSet);
+  const sameSavedSkill = !fromBd && activeSecondWeapons(state) === (state.source?.secondWeapons ?? false) && (!selected || selected.group === combat?.mainGroup && selected.setId === combat?.activeSet);
   const cannotCrit = tags.includes('spell') && supports.some((support) => support.name === 'Controlled Destruction') || sameBd && bd?.offense?.cannotCrit === true;
   if (cannotCrit) notes.push('已识别无法暴击的辅助／参考天赋，暴击词缀不参与此推荐。');
   const priorities: SkillPlan['priorities'] = [];
@@ -80,7 +81,7 @@ export function skillPlan(state: LoadoutState): SkillPlan | undefined {
     if (signal && (!selected || selected.source === 'bd' || bd?.main.label === label)) { priority.weight = Math.max(priority.weight, signal.weight); priority.reason += ` 参考 BD：${signal.reason}`; }
   }
   if (bd && bd.main.label !== label) warnings.push(`当前指定技能为${label}，参考 BD 主技能为${bd.main.label}；未混用其暴击与伤害天赋权重。`);
-  if (!fromBd && state.source?.combat?.matchesEquipment === false) warnings.push('技能来自另一装备快照，推荐方向可参考，最终收益需要更新 PoB2。');
+  if (!fromBd && (state.source?.combat?.matchesEquipment === false || activeSecondWeapons(state) !== state.source?.secondWeapons)) warnings.push('技能来自另一装备快照或武器组，推荐方向可参考，最终收益需要更新 PoB2。');
   return { label, name, tags, weapon, supports, source, elements, crit: priorities.some((entry) => entry.family === 'critChance'), priorities, notes, warnings, key };
 }
 
@@ -145,7 +146,8 @@ export function skillTargetRows(equipment: Equipment, state: LoadoutState, data?
       found.set(mod.ref, { key: original.length === 1 ? `mod:${original[0]!.key}` : `bd:${mod.ref}`, label: original.length === 1 ? original[0]!.label : mod.label.replace(/[+-]?\d+(?:\.\d+)?/g, '#'), ids: equipmentStatAliases(mod.ref, mod.ids, ['implicit', 'enchant', 'rune']), enabled: true,
         min: '', max: '', actualValue: baseline, weight: String(priority.weight), scoringRef: mod.ref,
         referenceScale: reference.roll.max, suggested: !original.length, recommendation: priority.reason,
-        targetRange: reference.roll, targetFloor: { min: reference.min, max: reference.max }, targetPatch: data.patch });
+        targetRange: reference.roll, targetFloor: { min: reference.min, max: reference.max }, targetPatch: data.patch,
+        targetTiers: reference.tiers, affixType: entry.type, affixFamily: entry.family });
     }
   }
   return [...found.values()].sort((a, b) => Number(b.weight) - Number(a.weight)).slice(0, 12);

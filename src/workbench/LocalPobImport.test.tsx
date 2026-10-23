@@ -33,4 +33,44 @@ describe('local PoB2 import actions', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('请先配置 PoB2');
     expect(onRead).not.toHaveBeenCalled();
   });
+  it('launches PoB2 only on click and explains the game import/save step', async () => {
+    const network = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+    vi.stubGlobal('fetch', network);
+    const onRead = vi.fn(() => Promise.resolve()), user = userEvent.setup();
+    render(<LocalPobImport onRead={onRead} currentFile="Current.xml" />);
+    expect(screen.getByRole('button', { name: '打开 PoB2' })).toBeVisible();
+    expect(network).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: '打开 PoB2' }));
+    expect(network).toHaveBeenCalledWith('/api/workbench/pob/launch', expect.objectContaining({ method: 'POST', body: '{}' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Ctrl+S');
+    expect(onRead).not.toHaveBeenCalled();
+  });
+  it('refreshes and previews the current file rather than the most recently saved other build', async () => {
+    const modifiedAt = '2026-10-23T10:00:00Z';
+    const network = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, installed: true, builds: [
+        { id: 'other', name: 'Other.xml', modifiedAt: '2026-10-23T11:00:00Z' }, { id: 'current', name: 'Current.xml', modifiedAt },
+      ] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, xml: '<PathOfBuilding2/>', name: 'Current.xml', modifiedAt })));
+    vi.stubGlobal('fetch', network);
+    const onRead = vi.fn(() => Promise.resolve()), user = userEvent.setup();
+    render(<LocalPobImport onRead={onRead} currentFile="Current.xml" savedAt={modifiedAt} />);
+    await user.click(screen.getByRole('button', { name: '保存后重新读取' }));
+    expect(network.mock.calls[0]![0]).toBe('/api/workbench/pob/builds');
+    expect(JSON.parse(network.mock.calls[1]![1]!.body as string)).toEqual({ id: 'current' });
+    expect(onRead).toHaveBeenCalledWith('<PathOfBuilding2/>', { name: 'Current.xml', modifiedAt });
+    expect(await screen.findByRole('status')).toHaveTextContent('文件保存时间未变化');
+  });
+  it('requires an explicit choice when the current file is missing or duplicated instead of silently changing characters', async () => {
+    const network = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ ok: true, installed: true, builds: [
+      { id: 'a', name: 'First/Current.xml' }, { id: 'b', name: 'Second/Current.xml' },
+    ] })));
+    vi.stubGlobal('fetch', network);
+    const onRead = vi.fn(() => Promise.resolve()), user = userEvent.setup();
+    render(<LocalPobImport onRead={onRead} currentFile="Current.xml" />);
+    await user.click(screen.getByRole('button', { name: '保存后重新读取' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('没有唯一匹配');
+    expect(screen.getByRole('combobox', { name: '本机 PoB2 角色' })).toHaveValue('');
+    expect(network).toHaveBeenCalledTimes(1); expect(onRead).not.toHaveBeenCalled();
+  });
 });

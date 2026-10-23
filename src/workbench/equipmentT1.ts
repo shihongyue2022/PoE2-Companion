@@ -7,6 +7,7 @@ import { tradeLineRangeMapping } from './tradeSearch';
 export interface EquipmentT1Reference {
   status: 't1' | 'fixed' | 'unverified'; note: string; min?: number; max?: number; requiredLevel?: number;
   roll?: { min: number; max: number };
+  tiers?: { tier: number; min?: number; max?: number; roll: { min: number; max: number }; requiredLevel: number }[];
 }
 export interface EquipmentT1Result {
   rows: EquipmentTradeRow[]; references: ReadonlyMap<string, EquipmentT1Reference>; issues: string[];
@@ -24,7 +25,7 @@ export function referenceFor(modifier: EquipmentMod, pool: readonly Mod[], data:
   if (!modifier.searchable || !modifier.ref) return { status: 'unverified', note: '尚未识别为唯一的官方交易属性，不能确认 T1。' };
   const expected = hashes(modifier.ids);
   const source = placements.has('desecrated') && !placements.has('explicit') && !placements.has('fractured') ? 'desecrated' : 'normal';
-  const candidates: { min?: number; max?: number; roll?: { min: number; max: number }; requiredLevel: number; fixed: boolean; family: string; source: string }[] = [];
+  const candidates: { min?: number; max?: number; roll?: { min: number; max: number }; tiers?: EquipmentT1Reference['tiers']; requiredLevel: number; fixed: boolean; family: string; source: string }[] = [];
   for (const mod of pool) {
     if (mod.rune || modifier.affixType && mod.type !== modifier.affixType) continue;
     // Desecration can mark an ordinary mod too; prefer its special pool only when it actually matches.
@@ -59,7 +60,15 @@ export function referenceFor(modifier: EquipmentMod, pool: readonly Mod[], data:
       const previousHigh = previous ? matchEquipmentStat(render(1, previous)).value : undefined;
       const lowerIsBetter = previousLow !== undefined && previousHigh !== undefined
         ? min + max < previousLow + previousHigh : modifier.value !== undefined && modifier.value < 0;
-      candidates.push({ ...(lowerIsBetter ? { max } : { min }), roll: { min, max }, requiredLevel: tier.ilvl, fixed: false, family: mod.family, source: mod.source });
+      const tiers = mod.tiers.flatMap((entry, index) => {
+        const ranges = entry.ranges.slice(layout.first, layout.first + layout.count);
+        if (ranges.length !== layout.count || ranges.some((range) => !Number.isFinite(range[0]) || !Number.isFinite(range[1]) || range[0]! > range[1]!)) return [];
+        const a = matchEquipmentStat(render(0, ranges)), b = matchEquipmentStat(render(1, ranges));
+        if (a.ref !== modifier.ref || b.ref !== modifier.ref || a.value === undefined || b.value === undefined) return [];
+        const low = Math.min(a.value, b.value), high = Math.max(a.value, b.value);
+        return [{ tier: mod.tiers.length - index, ...(lowerIsBetter ? { max: high } : { min: low }), roll: { min: low, max: high }, requiredLevel: entry.ilvl }];
+      }).sort((a, b) => a.tier - b.tier);
+      candidates.push({ ...(lowerIsBetter ? { max } : { min }), roll: { min, max }, tiers, requiredLevel: tier.ilvl, fixed: false, family: mod.family, source: mod.source });
     }
   }
   const preferred = source === 'desecrated' && candidates.some((candidate) => candidate.source === 'desecrated') ? candidates.filter((candidate) => candidate.source === 'desecrated') : candidates;
@@ -67,8 +76,11 @@ export function referenceFor(modifier: EquipmentMod, pool: readonly Mod[], data:
   const signatures = new Set(preferred.map(({ min, max, roll, fixed, family, source }) => JSON.stringify({ min, max, roll, fixed, family, source })));
   if (signatures.size !== 1) return { status: 'unverified', note: '此属性可能来自不同词缀或混合词缀，T1 范围不唯一。请使用 Ctrl+Alt+C 高级复制后核对前后缀。' };
   const found = preferred[0]!;
+  // A unique T1 can remain valid even when lower tiers differ. Expose a full
+  // ladder only when it is unambiguous, rather than inventing T2/T3 thresholds.
+  const tiers = new Set(preferred.map((entry) => JSON.stringify(entry.tiers))).size === 1 ? found.tiers : undefined;
   return found.fixed ? { status: 'fixed', note: '此效果在规则中只有固定机制，没有可提高的数值阶层。' }
-    : { status: 't1', min: found.min, max: found.max, roll: found.roll, requiredLevel: found.requiredLevel,
+    : { status: 't1', min: found.min, max: found.max, roll: found.roll, tiers, requiredLevel: found.requiredLevel,
       note: `T1 参考${found.max === undefined ? '下限' : '上限'} ${found.min ?? found.max} · 规则 ${data.patch} · 所需物等 ${found.requiredLevel}` };
 }
 

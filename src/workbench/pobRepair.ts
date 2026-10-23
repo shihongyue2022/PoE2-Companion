@@ -3,6 +3,7 @@ import { parsePobXml, previewPob } from './pobImport';
 import type { LoadoutSlot, LoadoutState } from './loadout';
 import type { PobSource } from './loadoutSource';
 import { equipmentSignature } from './characterPanel';
+import { syncWeaponSets } from './weaponSets';
 
 export const POB_REVIEW_MARKER = '[PoB数值待游戏文本核对]';
 const withoutMarker = (raw: string) => raw.split(POB_REVIEW_MARKER).join('').trim();
@@ -51,13 +52,13 @@ export function applyPobItemRepair(state: LoadoutState, slot: LoadoutSlot, expec
   if (!before || !after || identity(before) !== identity(after)) throw new Error('重新识别结果与原装备不符，未覆盖。');
   const slots = { ...state.slots, [slot]: raw }, quotes = { ...state.quotes }; delete quotes[slot];
   const previous = equipmentSignature(state.slots), signature = equipmentSignature(slots);
-  return { ...state, slots, quotes,
+  return syncWeaponSets({ ...state, slots, quotes,
     source: state.source?.equipmentSignature === previous ? { ...state.source, equipmentSignature: signature } : state.source,
     character: state.character?.equipmentSignature === previous ? { ...state.character, equipmentSignature: signature } : state.character,
-  };
+  });
 }
 
-export async function readOriginalLocalPob(source: PobSource, signal: AbortSignal): Promise<string> {
+export async function readOriginalLocalPob(source: PobSource, signal: AbortSignal, requireSameSnapshot = false): Promise<string> {
   if (!source.fileName) throw new Error('未记录原文件名，请选择原 PoB2 XML 文件进行核对。');
   const response = await fetch('/api/workbench/pob/builds', { signal });
   if (!response.ok) throw new Error('无法读取本机 PoB2，请保持工坊后台运行，或选择原 XML 文件。');
@@ -72,5 +73,6 @@ export async function readOriginalLocalPob(source: PobSource, signal: AbortSigna
   if (!build.ok) throw new Error('原 PoB2 文件无法读取，请刷新角色列表或选择 XML。');
   const data: unknown = await build.json();
   if (!object(data) || data.ok !== true || typeof data.xml !== 'string' || data.xml.length > 3_000_000) throw new Error('原 PoB2 XML 格式不正确或超过大小限制。');
+  if (requireSameSnapshot && (!source.savedAt || typeof data.modifiedAt !== 'string' || Date.parse(source.savedAt) !== Date.parse(data.modifiedAt))) throw new Error('原 PoB2 存档已更新或缺少保存时间，请点击“保存后重新读取”，预览并确认角色更新。');
   return data.xml;
 }

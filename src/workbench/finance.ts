@@ -1,4 +1,5 @@
 import type { TradeCandidate } from './tradeTracking';
+import type { OfficialHistoryReport } from './officialHistory';
 export const FINANCE_KEY = 'poe2-workbench-finance-v1';
 export const CURRENCIES = {
   exalted: '崇高石', divine: '神圣石', chaos: '混沌石', alchemy: '点金石', annul: '剥离石', regal: '富豪石', transmute: '蜕变石', augment: '增幅石',
@@ -22,7 +23,7 @@ export interface Valuation {
   assets: { id: string; label: string; quantity: number; price: number | null }[];
 }
 export interface FinanceState { version: 1; sessions: PlaySession[]; entries: LedgerEntry[]; assets: Asset[]; valuations: Valuation[];
-  tradeInbox?: TradeCandidate[]; ignoredTradeIds?: string[]; tradeEnabled?: boolean }
+  tradeInbox?: TradeCandidate[]; ignoredTradeIds?: string[]; tradeEnabled?: boolean; officialHistory?: Record<string, OfficialHistoryReport> }
 export const emptyFinance = (): FinanceState => ({ version: 1, sessions: [], entries: [], assets: [], valuations: [] });
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1e12;
 export const isCurrency = (value: unknown): value is Currency => typeof value === 'string' && Object.prototype.hasOwnProperty.call(CURRENCIES, value);
@@ -60,6 +61,9 @@ export function readFinance(input: string): FinanceState {
     || !date(row.at) || !isCurrency(row.currency) || !Array.isArray(row.assets) || row.assets.length > 500
     || !row.assets.every(mark) || !uniqueIds(row.assets)) throw new Error('估值快照不正确。');
   const state = value as unknown as FinanceState;
+  if (value.officialHistory !== undefined && (!object(value.officialHistory) || Object.keys(value.officialHistory).length > 100 || !Object.entries(value.officialHistory).every(([league, report]) =>
+    string(league) && object(report) && date(report.fetchedAt) && ['count', 'skipped', 'missingIds', 'unknownCurrencies', 'sales', 'purchases'].every((key) => Number.isSafeInteger(report[key]) && (report[key] as number) >= 0 && (report[key] as number) <= 1000) &&
+    (report.firstAt === undefined || date(report.firstAt)) && (report.lastAt === undefined || date(report.lastAt)) && (report.hasMore === undefined || typeof report.hasMore === 'boolean')))) throw new Error('官方成交同步范围不正确。');
   if (state.tradeEnabled !== undefined && typeof state.tradeEnabled !== 'boolean') throw new Error('追踪设置不正确。');
   if (state.ignoredTradeIds !== undefined && (!Array.isArray(state.ignoredTradeIds) || state.ignoredTradeIds.length > 20000 || !state.ignoredTradeIds.every(string))) throw new Error('忽略记录不正确。');
   if (state.tradeInbox !== undefined && (!Array.isArray(state.tradeInbox) || state.tradeInbox.length > 500 || !state.tradeInbox.every(validTradeCandidate) || !uniqueIds(state.tradeInbox))) throw new Error('待确认交易不正确。');
@@ -77,12 +81,21 @@ export function validTradeCandidate(value: unknown): value is TradeCandidate {
     && (value.acceptedAt === undefined || date(value.acceptedAt) && Date.parse(value.acceptedAt) >= Date.parse(value.at));
 }
 export function collectTrades(state: FinanceState, events: readonly TradeCandidate[]): FinanceState {
-  const seen = new Set([...(state.ignoredTradeIds ?? []), ...(state.tradeInbox ?? []).map((row) => row.id), ...state.entries.flatMap((row) => row.trade ? [row.trade.sourceId] : [])]);
+  // Acceptance may arrive in a later poll. Stable IDs deduplicate the quote, but
+  // must not discard new evidence for a pending quote already in the inbox.
+  const updated = (state.tradeInbox ?? []).map((row) => {
+    const incoming = events.find((event) => event.id === row.id && validTradeCandidate(event) && event.acceptedAt
+      && event.at === row.at && event.player === row.player && event.item === row.item && event.amount === row.amount
+      && event.currency === row.currency && event.kind === row.kind && event.league === row.league && event.quantity === row.quantity);
+    return incoming?.acceptedAt && (!row.acceptedAt || Date.parse(incoming.acceptedAt) > Date.parse(row.acceptedAt)) ? { ...row, acceptedAt: incoming.acceptedAt } : row;
+  });
+  const enriched = updated.some((row, index) => row !== state.tradeInbox![index]) ? { ...state, tradeInbox: updated } : state;
+  const seen = new Set([...(state.ignoredTradeIds ?? []), ...(state.tradeInbox ?? []).map((row) => row.id), ...state.entries.flatMap((row) => row.trade ? [row.trade.sourceId, `entry-${row.id}`] : [`entry-${row.id}`])]);
   const added = events.filter((row) => { if (!validTradeCandidate(row) || seen.has(row.id)) return false; seen.add(row.id); return true; });
-  if (!added.length) return state;
+  if (!added.length) return enriched;
   // Keep unprocessed records instead of silently evicting them when the inbox is full.
   const space = Math.max(0, 500 - (state.tradeInbox?.length ?? 0));
-  return space ? { ...state, tradeInbox: [...state.tradeInbox ?? [], ...added.slice(0, space)] } : state;
+  return space ? { ...enriched, tradeInbox: [...enriched.tradeInbox ?? [], ...added.slice(0, space)] } : enriched;
 }
 export function confirmTrade(state: FinanceState, candidate: TradeCandidate, league: string,
   actual: { amount: number; currency: Currency; kind: 'sale' | 'purchase' }): FinanceState {
@@ -102,13 +115,21 @@ export function confirmTrade(state: FinanceState, candidate: TradeCandidate, lea
 export function trackerReport(state: FinanceState, league: string, currency: Currency, days: number, search = '', now = Date.now()) {
   const ids = new Set(state.sessions.filter((row) => row.league === league).map((row) => row.id));
   const start = days === 1 ? new Date(new Date(now).setHours(0, 0, 0, 0)).getTime() : days ? now - days * 86400_000 : 0;
-  const rows = state.entries.filter((row) => row.confirmed && ids.has(row.sessionId) && row.currency === currency && Date.parse(row.at) >= start
-    && Date.parse(row.at) <= now && `${row.label} ${row.trade?.player ?? ''}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const eligible = state.entries.filter((row) => row.confirmed && ids.has(row.sessionId) && Date.parse(row.at) >= start
+    && Date.parse(row.at) <= now && `${row.label} ${row.trade?.player ?? ''}`.toLowerCase().includes(search.toLowerCase()));
+  const rows = eligible.filter((row) => row.currency === currency).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const currencies = Object.keys(CURRENCIES).flatMap((key) => {
+    const unit = key as Currency, entries = eligible.filter((row) => row.currency === unit);
+    if (!entries.length) return [];
+    const income = entries.filter((row) => row.kind === 'sale' || row.kind === 'income').reduce((sum, row) => sum + row.amount, 0);
+    const expense = entries.filter((row) => row.kind === 'purchase' || row.kind === 'craft').reduce((sum, row) => sum + row.amount, 0);
+    return [{ currency: unit, count: entries.length, income, expense, net: income - expense }];
+  });
   const income = rows.filter((row) => row.kind === 'sale' || row.kind === 'income').reduce((sum, row) => sum + row.amount, 0);
   const expense = rows.filter((row) => row.kind === 'purchase' || row.kind === 'craft').reduce((sum, row) => sum + row.amount, 0);
   const groups = new Map<string, LedgerEntry[]>();
   for (const row of rows) { const key = new Date(row.at).toLocaleDateString('zh-CN'); groups.set(key, [...groups.get(key) ?? [], row]); }
-  return { rows, income, expense, net: income - expense, groups: [...groups.entries()] };
+  return { rows, income, expense, net: income - expense, groups: [...groups.entries()], currencies };
 }
 export function addLoadoutAssets(state: FinanceState, league: string, inputs: readonly { itemKey: string; label: string; quantity: number; price: number | null; currency: Currency }[], refreshPrices = false) {
   const existing = new Set(state.assets.filter((asset) => asset.league === league && asset.source?.kind === 'loadout').map((asset) => asset.source!.itemKey));

@@ -120,7 +120,7 @@ describe('comprehensive upgrade market search', () => {
     expect(screen.queryByText(/提高下限10%/)).toBeNull();
     const weight = screen.getAllByRole('spinbutton', { name: /权重$/ });
     expect(weight.length).toBeGreaterThanOrEqual(3);
-    await user.type(screen.getByRole('spinbutton', { name: '升级预算上限' }), '25');
+    await user.selectOptions(screen.getByRole('combobox', { name: '升级预算上限档位' }), '25');
     await user.click(screen.getByRole('button', { name: '搜索市场综合候选' }));
     await waitFor(() => expect(screen.getByText(/#1 Balanced Boots/)).toBeVisible());
     expect(screen.getByText('有取舍，含下降属性', { exact: false })).toBeVisible();

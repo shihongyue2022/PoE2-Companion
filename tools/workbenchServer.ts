@@ -1,4 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import {
@@ -111,11 +115,13 @@ export function validateEstimate(value: unknown): { league: string; search: Json
   }
   const ranked = object(value.search.sort) && value.search.sort['statgroup.0'] === 'desc';
   const damageSort = object(value.search.sort) && value.search.sort.dps === 'desc';
+  const propertySort = object(value.search.sort) ? Object.entries(value.search.sort).find(([key, direction]) => ['pdps', 'edps', 'ar', 'ev', 'es', 'spirit'].includes(key) && direction === 'desc')?.[0] : undefined;
   if (damageSort && (!object(query.filters) || !object(query.filters.type_filters) || !object(query.filters.type_filters.filters)
     || !object(query.filters.type_filters.filters.category) || typeof query.filters.type_filters.filters.category.option !== 'string'
     || !query.filters.type_filters.filters.category.option.startsWith('weapon.'))) throw new WorkbenchRequestError(400, '武器 DPS 排序只适用于明确的武器类别。');
   if (ranked && (!object(query.stats[0]) || query.stats[0].type !== 'weight' || !Array.isArray(query.stats[0].filters) || !query.stats[0].filters.length)) throw new WorkbenchRequestError(400, '综合排序需要有效的加权条件。');
-  return { league: value.league.trim(), search: { query, sort: damageSort ? { dps: 'desc' } : ranked ? { 'statgroup.0': 'desc' } : { price: 'asc' } } };
+  if (propertySort && ['pdps', 'edps'].includes(propertySort) && !String((query.filters.type_filters.filters.category as JsonObject | undefined)?.option ?? '').startsWith('weapon.')) throw new WorkbenchRequestError(400, '武器属性排序需要武器类别。');
+  return { league: value.league.trim(), search: { query, sort: propertySort ? { [propertySort]: 'desc' } : damageSort ? { dps: 'desc' } : ranked ? { 'statgroup.0': 'desc' } : { price: 'asc' } } };
 }
 
 /** Absolute deadline from Retry-After and the official dynamic rate-limit state. */
@@ -208,7 +214,7 @@ export function createEstimateService(options: EstimateServiceOptions = {}) {
       }
       const summary = summarizeListingPrices(listings);
       const damageSort = object(search.sort) && search.sort.dps === 'desc';
-      const ranked = object(search.sort) && (search.sort['statgroup.0'] === 'desc' || damageSort);
+      const ranked = object(search.sort) && Object.entries(search.sort).some(([key, direction]) => key !== 'price' && direction === 'desc');
       const context = estimateQueryContext(search);
       const confidence = estimateConfidence(context, summary.groups);
       if (summary.groups.some((group) => group.count < 5)) warnings.push('部分币种少于 5 个卖家，样本很少，区间仅供核对。');
@@ -219,7 +225,7 @@ export function createEstimateService(options: EstimateServiceOptions = {}) {
       return {
         ok: true, total: Math.max(0, Math.floor(found.total)), fetched: listings.length,
         ...summary, sampledAt: new Date(now()).toISOString(), cached: false,
-        context, ...(ranked ? {} : { confidence }), listings: representativeListings(listings, ranked),
+        context, ...(ranked ? {} : { confidence }), listings: representativeListings(listings, true),
         url: `${OFFICIAL}/trade2/search/poe2/${encodeURIComponent(league)}/${encodeURIComponent(found.id)}`, warnings,
       };
     } catch (error) {
@@ -332,6 +338,21 @@ export function createWorkbenchBridge(options: EstimateServiceOptions & { localP
       }
       if (route === '/api/workbench/health' && request.method === 'GET') {
         writeJson(response, 200, { ok: true, app: 'poe2-craft-workbench' }); return;
+      }
+      if (route === '/api/workbench/history/setup' && request.method === 'POST') {
+        if (process.platform !== 'win32') throw new WorkbenchRequestError(400, '请在浏览器扩展页加载项目 browser-extension/official-history 目录。');
+        const directory = fileURLToPath(new URL('../browser-extension/official-history/', import.meta.url));
+        if (!existsSync(join(directory, 'manifest.json'))) throw new WorkbenchRequestError(404, '项目缺少官方成交同步扩展。');
+        const edge = /Edg\//.test(request.headers['user-agent'] ?? '');
+        const locations = [process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)'], process.env.LOCALAPPDATA].filter((path): path is string => !!path);
+        const browser = locations.map((path) => join(path, edge ? 'Microsoft/Edge/Application/msedge.exe' : 'Google/Chrome/Application/chrome.exe')).find(existsSync);
+        const launch = (exe: string, args: string[]) => new Promise<void>((resolve, reject) => {
+          const child = spawn(exe, args, { detached: true, windowsHide: true, stdio: 'ignore' });
+          child.once('error', reject); child.once('spawn', () => { child.unref(); resolve(); });
+        });
+        await launch('explorer.exe', [directory]);
+        if (browser) await launch(browser, [edge ? 'edge://extensions' : 'chrome://extensions']);
+        writeJson(response, 200, { ok: true, directory, message: '已打开扩展目录与浏览器扩展页。开启开发者模式，点击“加载已解压的扩展程序”并选择该目录，然后刷新两页。' }); return;
       }
       if (route === '/api/workbench/trade-log' && request.method === 'GET') {
         writeJson(response, 200, { ok: true, ...await tradeLog.read(url.searchParams.get('history') === '1') }); return;

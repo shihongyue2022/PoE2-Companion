@@ -1,16 +1,19 @@
 import type { MetricKey, ResistanceKey, LoadoutState } from './loadout';
 import { readPobCombat, type PobCombat } from './pobCombat';
+import { readWeaponPair, type WeaponSets } from './weaponSets';
 
 export interface PobSource {
   kind: 'pob'; importedAt: string; fileName?: string; savedAt?: string;
   className?: string; ascendancy?: string; level?: number; version?: string;
   setId: string; setTitle: string; secondWeapons: boolean;
   equipmentSignature: string;
+  weaponSets?: Pick<WeaponSets, 'first' | 'second'>;
   warnings?: string[];
   combat?: PobCombat;
   reference?: { values: Partial<Record<MetricKey, number>>; caps: Partial<Record<ResistanceKey, number>>; effective?: Partial<Record<ResistanceKey, number>>; fullDps?: number };
 }
-export interface PreviousLoadout { slots: LoadoutState['slots']; source?: PobSource; replacedAt: string }
+export interface PreviousLoadout { slots: LoadoutState['slots']; weaponSets?: WeaponSets; source?: PobSource; replacedAt: string;
+  after?: { slots: LoadoutState['slots']; weaponSets?: WeaponSets } }
 export function readPobSource(value: unknown): PobSource | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const row = value as Record<string, unknown>;
@@ -25,6 +28,10 @@ export function readPobSource(value: unknown): PobSource | undefined {
   if (typeof row.level === 'number' && Number.isInteger(row.level) && row.level > 0 && row.level <= 100) result.level = row.level;
   if (Array.isArray(row.warnings)) result.warnings = row.warnings.filter((warning): warning is string => typeof warning === 'string').slice(0, 50).map((warning) => warning.slice(0, 500));
   result.combat = readPobCombat(row.combat);
+  if (row.weaponSets && typeof row.weaponSets === 'object') {
+    const sets = row.weaponSets as Record<string, unknown>, first = readWeaponPair(sets.first), second = readWeaponPair(sets.second);
+    if (first && second) result.weaponSets = { first, second };
+  }
   if (row.reference && typeof row.reference === 'object') {
     const ref = row.reference as Record<string, unknown>;
     const fields: MetricKey[] = ['life', 'mana', 'energyShield', 'armour', 'evasion', 'spirit', 'strength', 'dexterity', 'intelligence', 'movementSpeed', 'fireResistance', 'coldResistance', 'lightningResistance', 'chaosResistance'];

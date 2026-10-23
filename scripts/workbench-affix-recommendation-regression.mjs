@@ -1,0 +1,56 @@
+import { chromium, expect } from '@playwright/test';
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
+const errors = [], requests = [];
+page.on('pageerror', (error) => errors.push(error.message));
+try {
+  await page.route('**/api/workbench/estimate', async (route) => {
+    requests.push(route.request().postDataJSON());
+    await route.fulfill({ json: { ok: true, total: 5, fetched: 5, priced: 5, groups: [{ currency: 'divine', count: 5, min: 10, max: 15, median: 12, p25: 11, p75: 14 }], listings: [], warnings: ['浏览器测试报价，非真实市场'], sampledAt: new Date().toISOString(), cached: false, url: 'https://www.pathofexile.com/trade2' } });
+  });
+  await page.goto(process.env.WORKBENCH_URL ?? 'http://127.0.0.1:5173/?companion=1');
+  await page.evaluate(async () => {
+    const { damageState } = await import('/src/workbench/fixtures/damageGoal.ts');
+    const { equipmentSignature } = await import('/src/workbench/characterPanel.ts');
+    const state = damageState();
+    state.slots = { belt: 'Rarity: Rare\nSynthetic Belt\nRawhide Belt\n--------\nItem Level: 84\n--------\n{ Prefix Modifier }\n+60 to maximum Life' };
+    state.character.values = { fireResistance: 150, coldResistance: 150, lightningResistance: 150, chaosResistance: 57 };
+    state.character.equipmentSignature = state.source.equipmentSignature = equipmentSignature(state.slots);
+    localStorage.setItem('poe2-workbench-loadout-v1', JSON.stringify(state));
+  });
+  await page.reload();
+  const loadout = page.getByRole('region', { name: '角色全身装备' });
+  await loadout.getByRole('button', { name: /^腰带：/ }).click();
+  await loadout.getByRole('button', { name: '寻找这件的升级', exact: true }).click();
+  const panel = page.getByRole('region', { name: '全物品查价' });
+  const recommendation = panel.getByRole('region', { name: '角色缺口推荐检索' });
+  await expect(recommendation).toContainText('混沌抗性 · 候选本栏合计 ≥ 18%');
+  await expect(recommendation).toContainText('后缀 · T1 范围 24–27');
+  await panel.locator('.wb-search-conditions > summary').click();
+  const suffix = panel.getByRole('region', { name: '后缀搜索属性' });
+  await suffix.getByRole('checkbox', { name: '搜索属性：#%混沌抗性', exact: true }).check();
+  await suffix.getByLabel('#%混沌抗性搜索档位', { exact: true }).selectOption('t1');
+  const query = JSON.parse(new URL(await panel.getByRole('link', { name: '打开升级候选搜索', exact: true }).getAttribute('href')).searchParams.get('q'));
+  const filters = query.query.stats.flatMap((group) => group.filters);
+  assert(filters.some((row) => row.id === 'pseudo.pseudo_total_chaos_resistance' && row.value.min === 18));
+  assert(filters.some((row) => row.id.startsWith('explicit.') && row.value?.min === 24));
+  assert(!/[\u3400-\u9fff]/u.test(JSON.stringify(query)));
+  await suffix.getByText('全部阶层与 roll 范围 · 6 档', { exact: true }).click();
+  await expect(suffix).toContainText('T1：24–27 · 所需物等 81');
+  const study = panel.getByLabel('词缀价格影响');
+  await study.locator(':scope > summary').click();
+  await study.getByLabel('价格影响属性').selectOption('need:chaosResistance');
+  await study.getByRole('button', { name: '查询T1 起步价格', exact: true }).click();
+  await expect(study.getByText(/神圣石 · 低价 10/)).toBeVisible();
+  assert(requests.some((row) => row.search.sort.price === 'asc'));
+  await mkdir('artifacts/workbench', { recursive: true });
+  await recommendation.screenshot({ path: 'artifacts/workbench/affix-recommendation-desktop.png' });
+  await suffix.screenshot({ path: 'artifacts/workbench/affix-recommendation-tiers.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await study.screenshot({ path: 'artifacts/workbench/affix-price-mobile.png' });
+  assert.deepEqual(errors, []);
+  console.log('PASS missing chaos recommendation, actual suffix tiers, native query constraints, per-affix price sampling and mobile layout');
+} finally { await browser.close(); }

@@ -2,6 +2,7 @@ import { equipmentDisplayName, equipmentMetricDetails, parseEquipment } from './
 import { LOADOUT_SLOTS, type LoadoutState } from './loadout';
 import { parsePobXml, pobImportSource, previewPob } from './pobImport';
 import { samePobEquipmentFacts } from './pobRepair';
+import { activeSecondWeapons } from './weaponSets';
 
 /** Read-only contribution table: printed local defences are already included once. */
 export function equipmentComposition(state: LoadoutState) {
@@ -39,7 +40,12 @@ export function supplementPobCombat(state: LoadoutState, xml: string): LoadoutSt
   const preview = previewPob(document, source.setId, source.secondWeapons);
   const imported = pobImportSource(document, source.setId, source.secondWeapons, preview.slots);
   if (!imported.combat?.sets.some((set) => set.groups.length)) throw new Error('文件中没有技能组，请在 PoB2 导入 Items and Skills 后保存。');
-  const sameGear = LOADOUT_SLOTS.every((slot) => samePobEquipmentFacts(state.slots[slot.id] ?? '', preview.slots[slot.id] ?? ''));
+  let baseline = state.slots;
+  if (activeSecondWeapons(state) !== source.secondWeapons) {
+    try { baseline = Object.fromEntries(JSON.parse(source.equipmentSignature) as [string, string][]); }
+    catch { baseline = {}; }
+  }
+  const sameGear = LOADOUT_SLOTS.every((slot) => samePobEquipmentFacts(baseline[slot.id] ?? '', preview.slots[slot.id] ?? ''));
   return { ...state, source: { ...source,
     reference: sameGear && imported.reference ? imported.reference : source.reference,
     combat: { ...imported.combat, matchesEquipment: imported.combat.matchesEquipment && sameGear } } };

@@ -15,7 +15,7 @@ export function RollRangeHint({ guide }: { guide?: RollGuide }) {
 export function SearchConditionHint({ row, upgrading }: { row: EquipmentTradeRow; upgrading: boolean }) {
   return <span className="wb-condition-hint">{!row.enabled ? '不参与搜索' : row.locked ? `自动保抗 ≥ ${row.min}%`
     : row.referenceOnly || row.presenceOnly || row.actualValue === undefined ? row.min || row.max ? `条件 ${row.min ? `≥ ${row.min}` : ''}${row.max ? ` ≤ ${row.max}` : ''}` : '保留此机制'
-      : row.min || row.max ? `${row.min ? `≥ ${row.min}` : ''}${row.max ? ` ≤ ${row.max}` : ''}` : upgrading ? '自动择优 · 不设单项门槛' : '不限制数值'}</span>;
+      : row.min || row.max ? `${row.min ? `≥ ${row.min}` : ''}${row.max ? ` ≤ ${row.max}` : ''}` : row.suggested && Number(row.weight) === 0 ? '要求此属性 · 数值由合计约束' : upgrading ? '自动择优 · 不设单项门槛' : '不限制数值'}</span>;
 }
 export default function SearchGuidancePanel({ ambition, onChoose, guideCount, note, busy, onLookup, unique }: {
   ambition: SearchAmbition | 'custom'; onChoose: (value: SearchAmbition) => void;

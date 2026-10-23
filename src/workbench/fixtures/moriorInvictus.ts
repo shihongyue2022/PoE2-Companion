@@ -35,3 +35,11 @@ export const MORIOR_INVICTUS_SAMPLE = `物品種類: 胸甲
 已汙染
 --------
 備註: ~b/o 2000 divine`;
+
+/** Second supplied game copy: lower local defence, more regeneration, 9 all-res per socket. */
+export const MORIOR_INVICTUS_CANDIDATE = MORIOR_INVICTUS_SAMPLE
+  .replace('品質: +25%', '品質: +20%').replace('護甲值: 1532', '護甲值: 1366')
+  .replace('閃避值: 1409', '閃避值: 1257').replace('能量護盾: 433', '能量護盾: 387')
+  .replace('增加398(300-400)%', '增加357(300-400)%')
+  .replace('+10(8-10)%', '+9(8-10)%').replace('8.2(8-12)', '11.8(8-12)')
+  .replace(/\n--------\n備註:[\s\S]*$/, '');

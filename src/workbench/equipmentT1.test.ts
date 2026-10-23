@@ -63,6 +63,15 @@ describe('all affix T1 market constraints', () => {
     expect(result.complete).toBe(false);
     expect(result.issues.join()).toContain('混合');
   });
+  it('preserves an unambiguous T1 while withholding lower tier menus if their ranges conflict', () => {
+    const item = parseEquipment(BOOTS_SAMPLE)!, original = data.mods.get('Boots_str_int/IncreasedLife')!;
+    const base = data.bases.get('Boots_str_int')!, id = 'Boots_str_int/SameTopDifferentT2';
+    const duplicate = { ...original, id, tiers: original.tiers.map((tier, index) => index === original.tiers.length - 2 ? { ...tier, ranges: tier.ranges.map((range) => [range[0]! - 1, range[1]!] as [number, number]) } : tier) };
+    const patch: PatchData = { ...data, mods: new Map([...data.mods, [id, duplicate]]), bases: new Map([...data.bases, [base.id, { ...base, pools: { ...base.pools, normal: { ...base.pools.normal, prefixes: [...base.pools.normal.prefixes, id] } } }]]) };
+    const result = buildEquipmentT1Rows(item, patch, { ...trade, mods: { ...trade.mods, [id]: trade.mods[original.id]! } });
+    const life = [...result.references.values()].find((ref) => ref.status === 't1' && ref.min === 120)!;
+    expect(life.status).toBe('t1'); expect(life.tiers).toBeUndefined();
+  });
   it('uses an upper bound for a signed reduced stat whose T1 values move downward', () => {
     const item = parseEquipment('Rarity: Rare\nRequirement Test\nAdherent Leggings\n--------\n20% reduced Attribute Requirements')!;
     const id = 'Boots_str_int/RequirementTest';

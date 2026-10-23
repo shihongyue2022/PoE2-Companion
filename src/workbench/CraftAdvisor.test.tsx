@@ -100,7 +100,7 @@ describe('crafting advisor decisions on the actual imported ring', () => {
     vi.mocked(computeWorkbench).mockReturnValue({ promise: Promise.resolve(result), cancel: vi.fn() });
     const { container } = renderAdvisor(<CraftAdvisor {...input} />);
     const repair = within(candidate(container));
-    await user.type(screen.getByRole('spinbutton', { name: '追加材料预算' }), '100');
+    await user.selectOptions(screen.getByRole('combobox', { name: '追加材料预算档位' }), '100');
     await user.click(repair.getByRole('button', { name: '单独评估此方案' }));
     expect(await repair.findByText('预计成本超过预算')).toBeVisible();
     expect(repair.getByText('500 Ex')).toBeVisible();
@@ -111,9 +111,7 @@ describe('crafting advisor decisions on the actual imported ring', () => {
     expect(request.targets).toContainEqual({ modId: 'Rings/ItemFoundRarityIncrease', tierDisplay: 1 });
     expect(request.targets.filter((target) => target.modId === 'Rings/ItemFoundRarityIncrease')).toHaveLength(1);
 
-    const budget = screen.getByRole('spinbutton', { name: '追加材料预算' });
-    await user.clear(budget);
-    await user.type(budget, '1000');
+    await user.selectOptions(screen.getByRole('combobox', { name: '追加材料预算档位' }), '1000');
     expect(repair.getByText('可考虑继续制作')).toBeVisible();
     const quote = repair.getByRole('spinbutton', { name: '先改善一项现有属性 成品参考价' });
     expect(quote).toHaveValue(null);
@@ -141,7 +139,7 @@ describe('crafting advisor decisions on the actual imported ring', () => {
     expect(job.cancel).toHaveBeenCalledTimes(1);
     expect(screen.getByText('已停止评估，已完成的结果仍可查看。')).toBeVisible();
     await act(async () => { job.resolve(exactResult()); await job.promise; });
-    expect(screen.queryByText('500 Ex')).not.toBeInTheDocument();
+    expect(screen.queryByText('500 Ex', { selector: '.wb-advisor-cost strong' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '查看通货顺序' })).not.toBeInTheDocument();
     expect(computeWorkbench).toHaveBeenCalledTimes(1);
   });
@@ -156,7 +154,7 @@ describe('crafting advisor decisions on the actual imported ring', () => {
     rerender(<CraftAdvisor {...input} item={{ ...item, level: 82 }} />);
     expect(job.cancel).toHaveBeenCalledTimes(1);
     await act(async () => { job.resolve(exactResult()); await job.promise; });
-    expect(screen.queryByText('500 Ex')).not.toBeInTheDocument();
+    expect(screen.queryByText('500 Ex', { selector: '.wb-advisor-cost strong' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '查看通货顺序' })).not.toBeInTheDocument();
     expect(screen.queryByText('正在评估：先改善一项现有属性')).not.toBeInTheDocument();
     expect(input.onBusyChange).toHaveBeenLastCalledWith(false);

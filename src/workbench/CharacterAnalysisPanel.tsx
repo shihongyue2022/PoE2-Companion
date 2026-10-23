@@ -7,6 +7,7 @@ import { readOriginalLocalPob } from './pobRepair';
 import { localizeEquipmentName } from './genericEquipment';
 import Icon from './WorkbenchIcon';
 import './characterAnalysis.css';
+import { activeSecondWeapons } from './weaponSets';
 
 const format = (value: number) => value.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
 const tagLabels: Record<string, string> = { attack: '攻击', spell: '法术', projectile: '投射物', melee: '近战', lightning: '闪电', fire: '火焰', cold: '冰冷', physical: '物理', chaos: '混沌', minion: '召唤物', area: '范围' };
@@ -78,12 +79,12 @@ export default function CharacterAnalysisPanel({ state, onSave, onSelectSlot }: 
       <p className="lo-footnote">{current ? '装备与 PoB2 保存快照对应' : '装备或武器组与伤害快照不同，请更新 PoB2；以下保留原方案参考'} · 技能与伤害取自最近读取的 XML。</p>
       {mainGroup && <section aria-label="主技能与辅助宝石"><h4>主技能 · {gem ? gemInfo(gem).label : `第 ${combat.mainGroup} 组`}</h4>
         {gem && <p className="lo-footnote">{gemInfo(gem).tags.map((tag) => tagLabels[tag] ?? tag).join(' · ')}</p>}
-        <Group group={mainGroup} secondWeapons={source?.secondWeapons ?? false} /></section>}
+        <Group group={mainGroup} secondWeapons={activeSecondWeapons(state)} /></section>}
       <Damage combat={combat} current={current} />
       <details><summary>全部技能配置 · {selectedSet?.groups.length ?? 0} 组</summary>
         {combat.sets.length > 1 && <select aria-label="查看技能组方案" value={selectedSet?.id} onChange={(event) => setViewSet(event.target.value)}>{combat.sets.map((set, index) => <option key={set.id} value={set.id}>技能方案 {index + 1}{set.id === combat.activeSet ? '（保存时启用）' : ''}</option>)}</select>}
         <p className="lo-footnote">灰色为未启用或另一套武器专属。查看其他技能组不会重新计算伤害；上方伤害始终对应保存时主技能。</p>
-        {selectedSet?.groups.map((group) => <Group key={group.index} group={group} secondWeapons={source?.secondWeapons ?? false} />)}
+        {selectedSet?.groups.map((group) => <Group key={group.index} group={group} secondWeapons={activeSecondWeapons(state)} />)}
       </details>
     </> : source && <p className="lo-footnote">这条旧记录尚未包含技能资料，请点击补读；无需重新输入装备。</p>}
     <section aria-label="装备构成"><h4>装备构成 · {rows.length} 件</h4>

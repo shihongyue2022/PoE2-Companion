@@ -69,7 +69,7 @@ describe('explicit crafting checkpoint controls', () => {
     const { rerender } = render(<CraftCheckpointPanel {...props} />);
     fireEvent.click(screen.getByRole('button', { name: '设置制作锚点' }));
     fireEvent.click(screen.getByRole('checkbox', { name: /允许移除：.*冰冷抗性/ }));
-    fireEvent.change(screen.getByRole('textbox', { name: '计划使用的通货' }), { target: { value: '旧装备的操作备注' } });
+    fireEvent.change(screen.getByRole('textbox', { name: '自定义通货组合' }), { target: { value: '旧装备的操作备注' } });
     expect(screen.getByRole('button', { name: '锁定本步目标' })).toBeEnabled();
     const replacement: ExistingItem = { ...current, level: 83,
       prefixes: [{ modId: 'Rings/IncreasedLife', tierDisplay: 1 }],
@@ -77,7 +77,7 @@ describe('explicit crafting checkpoint controls', () => {
     };
     rerender(<CraftCheckpointPanel {...props} item={replacement} baseName="Ruby Ring"
       targets={[{ modId: 'Rings/IncreasedLife', tierDisplay: 1 }]} />);
-    expect(screen.getByRole('textbox', { name: '计划使用的通货' })).toHaveValue('剥离石');
+    expect(screen.getByRole('combobox', { name: '计划使用的通货' })).toHaveValue('剥离石');
     expect(screen.getByRole('checkbox', { name: /允许移除：.*冰冷抗性/ })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: /必须保留：.*最大生命/ })).toBeChecked();
     expect(screen.queryByRole('checkbox', { name: /必须保留：.*稀有度/ })).not.toBeInTheDocument();
@@ -102,7 +102,7 @@ describe('explicit crafting checkpoint controls', () => {
     fireEvent.change(screen.getByRole('textbox', { name: '操作后装备文本' }), { target: { value: '上一次操作的旧文本' } });
     fireEvent.click(screen.getByRole('button', { name: '重新设定锚点' }));
     expect(capture).toHaveBeenLastCalledWith(null);
-    expect(screen.getByRole('textbox', { name: '计划使用的通货' })).toHaveValue('剥离石');
+    expect(screen.getByRole('combobox', { name: '计划使用的通货' })).toHaveValue('剥离石');
     expect(screen.queryByRole('button', { name: '设置制作锚点' })).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: '操作后装备文本' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox', { name: /允许移除：.*冰冷抗性/ }));

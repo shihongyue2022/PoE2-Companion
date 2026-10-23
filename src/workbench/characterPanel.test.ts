@@ -43,12 +43,12 @@ describe('game character panel calibration', () => {
     expect(result.metrics.find((metric) => metric.key === 'life')).toMatchObject({ before: 70, after: 90, delta: 20 });
     expect(result.warnings.join(' ')).toContain('仍只比较装备贡献');
   });
-  it('invalidates the game baseline after equipment changes rather than reusing stale character values', () => {
+  it('keeps the measured sheet stale but projects resistance through cumulative equipment changes', () => {
     const inserted = equipRaw(calibrated(), 'ring1', ring(30));
     if (!inserted.ok) throw new Error(inserted.error);
     expect(validCharacterPanel(inserted.state)).toBe(false);
     const result = compareCandidate(inserted.state, 'ring1', parseEquipment(ring(40))!);
-    expect(result.characterResistances).toEqual([]);
-    expect(result.status).toBe('insufficient');
+    expect(result.characterResistances[0]).toMatchObject({ before: 194, after: 204, effectiveAfter: 75, effectiveDelta: 0 });
+    expect(result.status).toBe('equal');
   });
 });

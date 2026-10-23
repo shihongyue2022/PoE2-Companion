@@ -7,19 +7,22 @@ import { liveLoadoutContext, loadoutUpgradeRows, type LoadoutContext } from './l
 import { usesDamageGoal } from './damageGoal';
 import { automaticUtilityRows } from './searchGuidance';
 import { mergeSkillTargetRows, skillTargetRows } from './skillRecommendation';
+import { addResistanceAffixRows, availableAffixes } from './equipmentAffixes';
+import { activeWeaponSet } from './weaponSets';
 
 /** Shared defaults for market ranking and the equipment comparison page. */
 export function upgradeSearchRows(equipment: Equipment, context?: LoadoutContext, data?: PatchData, trade?: GearTrade | null): EquipmentTradeRow[] {
   const targets = context && liveLoadoutContext(context) && usesDamageGoal(context.state)
     ? skillTargetRows(equipment, context.state, data, trade ?? undefined) : [];
   const rows = mergeSkillTargetRows(equipmentTradeRows(equipment, 'upgrade'), targets, equipment);
-  return automaticUtilityRows(loadoutUpgradeRows(rows, equipment, context), equipment);
+  return addResistanceAffixRows(automaticUtilityRows(loadoutUpgradeRows(rows, equipment, context), equipment), equipment,
+    context, availableAffixes(equipment, data, trade), data?.patch);
 }
 
 export interface UpgradeSearchSnapshot { slot: LoadoutSlot; sourceRaw: string; contextKey: string; rows: readonly EquipmentTradeRow[] }
 export interface UpgradeCandidateInput { id: string; raw: string; slot?: LoadoutSlot; search?: UpgradeSearchSnapshot }
 // Quotes and UI selection do not change the combat context; all gear, goals and calibration do.
-function contextKey(state: LoadoutState) { return JSON.stringify({ slots: state.slots, goals: state.goals, source: state.source, character: state.character }); }
+function contextKey(state: LoadoutState) { return JSON.stringify({ slots: state.slots, weaponSet: activeWeaponSet(state), goals: state.goals, source: state.source, character: state.character, socketEvidence: state.socketEvidence }); }
 export function captureUpgradeSearch(context: LoadoutContext | undefined, rows: readonly EquipmentTradeRow[]): UpgradeSearchSnapshot | undefined {
   return context && liveLoadoutContext(context) ? { slot: context.slot, sourceRaw: context.raw, contextKey: contextKey(context.state), rows: structuredClone(rows) } : undefined;
 }

@@ -163,7 +163,7 @@ export interface FlexibleTradeDocument {
     };
     readonly stats: readonly StatGroup[];
   };
-  readonly sort: { readonly price: 'asc' } | { readonly 'statgroup.0': 'desc' } | { readonly dps: 'desc' };
+  readonly sort: { readonly price: 'asc' } | Readonly<Record<string, 'desc'>>;
 }
 
 function readNumber(text: string, label: string): number | undefined {

@@ -19,7 +19,7 @@ function CurrencyInput({ value, onChange, label }: { value: Currency; onChange: 
   return <select aria-label={label} value={value} onChange={(event) => { if (isCurrency(event.target.value)) onChange(event.target.value); }}>{Object.entries(CURRENCIES).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select>;
 }
 
-export default function FinancePanel({ league }: { league: string }) {
+export default function FinancePanel({ league, active: visible = true }: { league: string; active?: boolean }) {
   const loadout = useSavedLoadout();
   const [addingEquipment, setAddingEquipment] = useState(false);
   const [refreshEquipmentPrices, setRefreshEquipmentPrices] = useState(false);
@@ -109,7 +109,7 @@ export default function FinancePanel({ league }: { league: string }) {
   }
   return <section className="wb-panel wb-finance" aria-label="交易与资产损益">
     {error && <p className="wb-inline-warning" role="alert">{error}</p>}{notice && <p className="lo-notice" role="status">{notice}</p>}
-    <TradeTracker state={state} league={league} save={save} onError={setError} onManual={() => {
+    <TradeTracker active={visible} state={state} league={league} save={save} onError={setError} onManual={() => {
       if (manual.current) { manual.current.open = true; manual.current.scrollIntoView({ behavior: 'smooth', block: 'start' }); manual.current.querySelector<HTMLInputElement>('[aria-label="收支说明"]')?.focus(); }
     }} />
     <details ref={manual} className="fn-section fn-advanced"><summary>场次与手动记账</summary><section aria-label="已确认收支">

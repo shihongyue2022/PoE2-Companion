@@ -1,25 +1,14 @@
+import { RESISTANCE_GOALS, resistanceGate, type ResistanceGate } from './resistanceModel';
+export { RESISTANCE_GOALS, resistanceGate, resistanceBaseline } from './resistanceModel';
+export type { ResistanceGate, ResistanceGoalRow } from './resistanceModel';
 import { equipmentMetricDetails, parseEquipment, type Equipment, type EquipmentMod } from './genericEquipment';
-import { equipmentSignature, validCharacterPanel } from './characterPanel';
 import { classifySkillMod, skillPlan, skillWeaponWarning } from './skillRecommendation';
-import type { LoadoutSlot, LoadoutState, ResistanceKey } from './loadout';
+import type { LoadoutSlot, LoadoutState } from './loadout';
 import type { EquipmentTradeRow } from './genericEquipmentTrade';
 import { scoreUpgrade, upgradeComponents } from './upgradeRanking';
 
 export const CAPPED_DAMAGE_OBJECTIVE = 'capped-damage' as const;
-export const RESISTANCE_GOALS = [
-  { key: 'fireResistance', label: '火焰抗性', id: 'pseudo.pseudo_total_fire_resistance' },
-  { key: 'coldResistance', label: '冰冷抗性', id: 'pseudo.pseudo_total_cold_resistance' },
-  { key: 'lightningResistance', label: '闪电抗性', id: 'pseudo.pseudo_total_lightning_resistance' },
-  { key: 'chaosResistance', label: '混沌抗性', id: 'pseudo.pseudo_total_chaos_resistance' },
-] as const;
 export function usesDamageGoal(state: LoadoutState) { return state.goals.objective === CAPPED_DAMAGE_OBJECTIVE; }
-export function resistanceBaseline(state: LoadoutState) {
-  if (validCharacterPanel(state) && state.character) return { ...state.character, origin: '游戏面板基准' };
-  if (state.source?.equipmentSignature === equipmentSignature(state.slots) && state.source.reference) {
-    return { ...state.source.reference, origin: 'PoB2 保存的角色总值' };
-  }
-  return undefined;
-}
 export function damageSkill(state: LoadoutState) {
   return skillPlan(state);
 }
@@ -55,51 +44,6 @@ export function damageGoalRows(rows: readonly EquipmentTradeRow[], equipment: Eq
       recommendation: advice?.reason ?? row.recommendation };
   });
 }
-export interface ResistanceGoalRow {
-  key: ResistanceKey; label: string; before?: number; after?: number; cap?: number;
-  minimum?: number; requiredOnItem?: number; met?: boolean;
-}
-export interface ResistanceGate {
-  status: 'met' | 'unmet' | 'unknown'; origin?: string; rows: ResistanceGoalRow[]; notes: string[];
-}
-const ordinaryResistance = (mod: EquipmentMod) => /^#% to (?:all Elemental Resistances|(?:Fire|Cold|Lightning|Chaos)(?: and (?:Fire|Cold|Lightning|Chaos))? Resistances?)(?: per Socket filled)?$/.test(mod.ref ?? '');
-function changedResistanceMechanic(before: Equipment | null, after: Equipment) {
-  const special = (item: Equipment | null) => (item?.mods ?? []).filter((mod) => /Resistance/i.test(mod.ref ?? mod.englishText ?? mod.text)
-    && !ordinaryResistance(mod))
-    .map((mod) => `${mod.ref ?? mod.text}:${mod.values.join(',')}`).sort().join('|');
-  return special(before) !== special(after);
-}
-export function resistanceGate(state: LoadoutState, slot: LoadoutSlot, candidate: Equipment,
-  context: { beforeFilledSockets?: number; afterFilledSockets?: number } = {}): ResistanceGate {
-  const baseline = resistanceBaseline(state), previous = parseEquipment(state.slots[slot] ?? '');
-  const oldDetails: Pick<ReturnType<typeof equipmentMetricDetails>, 'values' | 'pending'> = previous ? equipmentMetricDetails(previous, { filledSockets: context.beforeFilledSockets }) : { values: {}, pending: [] };
-  const newDetails = equipmentMetricDetails(candidate, { filledSockets: context.afterFilledSockets });
-  const notes: string[] = [];
-  if (!baseline) notes.push('缺少对应当前装备的角色未封顶总抗性，请更新 PoB2 或录入游戏面板；装备抗性之和不能代替角色总值。');
-  const changedMechanic = changedResistanceMechanic(previous, candidate);
-  if (changedMechanic) notes.push('候选改变了抗性上限、条件抗性或未完整解析的抗性机制，需要 PoB2／游戏复核。');
-  const wornMods = Object.values(state.slots).flatMap((raw) => { const item = parseEquipment(raw); return item && item.slot !== 'flask' && item.slot !== 'charm' ? item.mods : []; });
-  const scaling = [...wornMods, ...candidate.mods]
-    .some((mod) => !ordinaryResistance(mod) && /(?:increased|reduced|less|more|\bper\b|\bwhile\b|\bif\b|\bwhen\b|based on).*Resistances?|Resistances?.*(?:increased|reduced|less|more|\bper\b|\bwhile\b|\bif\b|\bwhen\b|based on)/i.test(mod.ref ?? mod.englishText ?? mod.text));
-  if (scaling) notes.push('装备含抗性缩放机制，不能用普通加减保证封顶，请在 PoB2 复核。');
-  const unresolved = [...(previous?.mods ?? []), ...candidate.mods].some((mod) => /Resistance/i.test(mod.ref ?? mod.englishText ?? mod.text)
-    && (!mod.ref || ordinaryResistance(mod) && mod.value === undefined));
-  if (unresolved) notes.push('替换栏位存在未核对的抗性数值，不把缺失贡献当作零。');
-  const rows = RESISTANCE_GOALS.map(({ key, label }): ResistanceGoalRow => {
-    const before = baseline?.values[key], cap = baseline?.caps[key] ?? (baseline?.origin === '游戏面板基准' ? 75 : undefined);
-    const minimum = cap === undefined ? undefined : Math.max(cap, state.goals.minimums[key] ?? cap);
-    const complete = before !== undefined && minimum !== undefined && !!previous?.identified && candidate.identified
-      && !oldDetails.pending.includes(key) && !newDetails.pending.includes(key) && !changedMechanic && !scaling && !unresolved;
-    const requiredOnItem = complete ? Math.max(0, minimum - before + (oldDetails.values[key] ?? 0)) : undefined;
-    const after = complete ? before - (oldDetails.values[key] ?? 0) + (newDetails.values[key] ?? 0) : undefined;
-    return { key, label, before, after, cap, minimum, requiredOnItem, met: after === undefined || minimum === undefined ? undefined : after + 1e-6 >= minimum };
-  });
-  if (baseline && rows.some((row) => row.before === undefined)) notes.push('部分抗性只有封顶后的有效值或尚未保存；不能据此推断溢出余量。');
-  if (baseline && rows.some((row) => row.cap === undefined)) notes.push('PoB2 未保存部分抗性上限，请在游戏面板基准中补齐；不把未知上限统一当作 75%。');
-  if ([...oldDetails.pending, ...newDetails.pending].some((key) => /Resistance$/.test(key))) notes.push('每插槽抗性尚未确认镶嵌数量，相关抗性保留待核对。');
-  return { status: rows.some((row) => row.met === false) ? 'unmet' : rows.every((row) => row.met === true) ? 'met' : 'unknown', origin: baseline?.origin, rows, notes };
-}
-
 /** Official per-element totals include all-res, hybrid and different affix placements. */
 export function resistanceQueryRows(state: LoadoutState, slot: LoadoutSlot, current: Equipment): EquipmentTradeRow[] {
   const gate = resistanceGate(state, slot, current);
