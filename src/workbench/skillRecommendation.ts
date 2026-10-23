@@ -47,7 +47,8 @@ export function readMainSkillSelection(value: unknown): MainSkillSelection | und
   return { source: 'pob', setId: row.setId, group: row.group, id: row.id, name: row.name, ...(unique.length ? { links: unique } : {}) };
 }
 export function skillPlan(state: LoadoutState): SkillPlan | undefined {
-  const selected = state.goals.mainSkill, bd = state.goals.build, combat = state.source?.combat;
+  const selected = state.goals.mainSkill ?? state.goals.skillBar?.[0], bd = state.goals.build, combat = state.source?.combat;
+  if (state.goals.skillBar && (!state.goals.skillBar.length || !selected || !state.goals.skillBar.some((entry) => entry.source === selected.source && entry.setId === selected.setId && entry.group === selected.group && entry.id === selected.id && entry.name === selected.name))) return undefined;
   const fromBd = selected?.source === 'bd' || !selected && !!bd;
   let name: string, label: string, tags: string[], weapon: string | undefined, supports: SkillPlan['supports'], key: string, source: string;
   if (fromBd) {
@@ -70,7 +71,10 @@ export function skillPlan(state: LoadoutState): SkillPlan | undefined {
   const elements = tags.filter((tag) => Object.prototype.hasOwnProperty.call(elementNames, tag)), notes: string[] = [], warnings: string[] = [];
   if (selected?.source === 'pob') {
     const linked = selectedSkillLinks(state, selected);
-    for (const link of linked) notes.push(`联动 · ${link.label}（第 ${link.group} 组）：${skillLinkEffect(name, link).detail}`);
+    for (const link of linked) {
+      const condition = link.name === 'Explosive Spear' ? state.goals.workflow?.conditions.ignitedGround : ['Whirling Slash', 'Whirlwind Lance'].includes(link.name) ? state.goals.workflow?.conditions.whirlwind : undefined;
+      notes.push(`联动 · ${link.label}（第 ${link.group} 组）：${skillLinkEffect(name, link).detail}${condition ? ` 已选覆盖：${condition === 'always' ? '常驻（仍需验证触发）' : condition === 'sometimes' ? '偶尔' : '不用；不视为有效联动'}。` : ''}`);
+    }
     if (linked.length < (selected.links?.length ?? 0)) warnings.push('部分联动技能已移除、停用或不属于当前武器组，请重新选择；其效果未用于推荐。');
   }
   // Exact, versioned PoB facts; never infer a conversion percentage from a skill's name/tag.

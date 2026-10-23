@@ -24,7 +24,8 @@ import LoadoutPanel from './LoadoutPanel';
 import { useSavedLoadout, writeSavedLoadout } from './loadoutStore';
 import { chooseComparisonSlot, type LoadoutContext } from './loadoutIntegration';
 import { resolveSkillAffixSearch, type SkillAffixSearch } from './skillAffixGuide';
-import type { UpgradeCandidateInput, UpgradeSearchSnapshot } from './upgradeWorkflow';
+import type { UpgradeCandidateInput, UpgradeSearchSnapshot, UpgradeMarketQuote } from './upgradeWorkflow';
+import { rememberUpgradeCandidate } from './upgradePlanStore';
 import { slotLabel, type LoadoutSlot } from './loadout';
 import type { LoadoutQuote } from './loadoutQuotes';
 import FinancePanel from './FinancePanel';
@@ -251,12 +252,14 @@ export default function WorkbenchApp() {
     setEquipmentPrice({ id: crypto.randomUUID(), raw: target.raw, source: 'loadout', intent: 'upgrade', loadoutSlot: request.slot, skillSearch: request });
     setQuickPrice(null); setTab('trade'); setPasteOpen(false);
   }
-  function compareWithLoadout(equipment: ReturnType<typeof parseEquipment>, search?: UpgradeSearchSnapshot) {
+  function compareWithLoadout(equipment: ReturnType<typeof parseEquipment>, search?: UpgradeSearchSnapshot, quote?: UpgradeMarketQuote) {
     if (!equipment) return;
     const slot = chooseComparisonSlot(savedLoadout.state, equipment, equipmentPrice?.loadoutSlot);
     if (!slot) { setNotice('这个物品暂无对应的角色装备栏位。'); return; }
-    setLoadoutCandidate({ id: crypto.randomUUID(), raw: equipment.raw, slot, search }); setTab('gear');
-    setNotice(`候选已送入${slotLabel(slot)}比较，尚未替换当前装备；可在角色页调整比较栏位。`);
+    const id = crypto.randomUUID();
+    const poolError = rememberUpgradeCandidate(savedLoadout.state, { id: `${quote?.id ?? id}:${slot}`, raw: equipment.raw, slot, quote });
+    setLoadoutCandidate({ id, raw: equipment.raw, slot, search, quote }); setTab('gear');
+    setNotice(`候选已送入${slotLabel(slot)}比较，尚未替换当前装备；${poolError || '已加入候选组合，可与其他部位一起核对。'}`);
   }
   function recordLoadoutQuote(quote: Omit<LoadoutQuote, 'itemText'>) {
     const context = loadoutContext;

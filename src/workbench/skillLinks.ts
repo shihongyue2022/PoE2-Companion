@@ -24,6 +24,9 @@ export function selectedSkillLinks(state: LoadoutState, selection: MainSkillSele
   return skillLinkChoices(state, selection).filter((entry) => keys.has(skillLinkKey(entry)));
 }
 export function skillLinkEffect(main: string, link: SkillLinkChoice): { detail: string; url?: string; verified: boolean } {
+  if (main === 'Twister' && link.name === 'Explosive Spear') return {
+    verified: true, detail: '爆炸长矛消耗狂怒球的强化爆炸可制造燃烧地面，供旋风经过时获得对应元素收益；未确认狂怒球来源与地面覆盖率时，不按常驻增伤计分。', url: 'https://poe2db.tw/us/Explosive_Spear',
+  };
   if (main === 'Twister' && ['Whirling Slash', 'Whirlwind Lance'].includes(link.name)) return {
     verified: true, detail: '提供可被旋风消耗的旋风效果；按实际叠层与接触触发，元素旋风还涉及额外元素伤害。未假定满层或全程覆盖。', url: 'https://poe2db.tw/us/Twister',
   };

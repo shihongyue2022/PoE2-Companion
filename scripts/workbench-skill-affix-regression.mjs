@@ -26,7 +26,8 @@ try {
   await page.reload();
   await mkdir('artifacts/workbench', { recursive: true });
   await page.getByRole('region', { name: '主输出与智能配装' }).screenshot({ path: 'artifacts/workbench/skill-icon-overview.png' });
-  await page.getByRole('button', { name: '查看增伤词缀与部位', exact: true }).click();
+  await page.getByText('技能与构成 · 旋风', { exact: true }).click();
+  await page.getByRole('region', { name: '主技能与辅助宝石' }).getByRole('button', { name: '查看旋风增伤词缀', exact: true }).click();
   const guide = page.getByRole('region', { name: '技能增伤与装备检索' });
   await expect(guide).toBeVisible();
   await expect(guide).toContainText('投射物速度的增加／减少');

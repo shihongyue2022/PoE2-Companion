@@ -5,7 +5,7 @@ const icons: Record<string, { url: string }> = images.icons;
 export function SkillGemArt({ name }: { name: string }) {
   const url = icons[name]?.url, [failed, setFailed] = useState('');
   return <span className="sg-art" aria-hidden="true">{url && failed !== url
-    ? <img src={url} alt="" width="40" height="40" loading="lazy" onError={() => setFailed(url)} />
+    ? <img src={url} alt="" draggable={false} width="40" height="40" loading="lazy" onError={() => setFailed(url)} />
     : <span title="暂无对应图标">◇</span>}</span>;
 }
 export default function SkillGemButton({ name, label, detail, selected, inactive, support, onClick, ariaLabel }: {

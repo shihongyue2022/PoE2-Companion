@@ -18,7 +18,7 @@ import { damageSkill, enforceDamageGoalRows, resistanceGate, usesDamageGoal } fr
 import { guidedSearchRows, rollGuides, type SearchAmbition } from './searchGuidance';
 import SearchGuidancePanel, { RollRangeHint, SearchConditionHint } from './SearchGuidancePanel';
 import { mergeSkillTargetRows, skillPlan, skillTargetRows } from './skillRecommendation';
-import { captureUpgradeSearch, upgradeSearchRows, type UpgradeSearchSnapshot } from './upgradeWorkflow';
+import { captureUpgradeSearch, upgradeSearchRows, type UpgradeSearchSnapshot, type UpgradeMarketQuote } from './upgradeWorkflow';
 import PresetNumberInput, { budgetPresets } from './PresetNumberInput';
 import AffixSearchChoice from './AffixSearchChoice';
 import LeaguePicker from './LeaguePicker';
@@ -32,7 +32,7 @@ type Preset = EquipmentTradePreset | 't1';
 
 export interface EquipmentTradePanelProps {
   raw: string; league: string; onLeague: (league: string) => void; autoEstimate?: boolean;
-  onEstimate?: PriceEstimateProps['onEstimate']; onCompare?: (equipment: Equipment, search?: UpgradeSearchSnapshot) => void;
+  onEstimate?: PriceEstimateProps['onEstimate']; onCompare?: (equipment: Equipment, search?: UpgradeSearchSnapshot, quote?: UpgradeMarketQuote) => void;
   leagues?: readonly TradeLeague[]; leagueError?: string; intent?: 'price' | 'upgrade' | 't1';
   t1Data?: PatchData; t1Trade?: GearTrade | null;
   loadoutContext?: LoadoutContext;
@@ -226,7 +226,7 @@ function EquipmentTradeEditor({ equipment, raw, league, onLeague, autoEstimate, 
         loadoutContext={loadoutContext && liveLoadoutContext(loadoutContext) ? loadoutContext : undefined} />
         : !nonEquipment && preset === 'similar' ? <CorePriceEstimate key={JSON.stringify([raw, league, exactBase, exactUnique, sameCorruption, status, activeRows])}
           options={{ equipment: searchEquipment, league, rows: activeRows, exactBase, exactUnique, sameCorruption, status }}
-          auto={autoEstimate} onEstimate={onEstimate} onRecordQuote={onRecordQuote} onCompare={onCompare} />
+          auto={autoEstimate} onEstimate={onEstimate} onRecordQuote={onRecordQuote} onCompare={onCompare ? (item, quote) => onCompare(item, undefined, quote) : undefined} />
         : <PriceEstimate query={result.query} url={result.url} league={league} auto={autoEstimate} onEstimate={onEstimate} itemRaw={raw}
           onRecordQuote={preset === 'similar' || preset === 'strict' ? onRecordQuote : undefined}
           buttonLabel={fullT1 ? '查询全 T1 市场' : undefined}

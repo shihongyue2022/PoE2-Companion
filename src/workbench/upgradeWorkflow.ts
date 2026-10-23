@@ -20,7 +20,8 @@ export function upgradeSearchRows(equipment: Equipment, context?: LoadoutContext
 }
 
 export interface UpgradeSearchSnapshot { slot: LoadoutSlot; sourceRaw: string; contextKey: string; rows: readonly EquipmentTradeRow[] }
-export interface UpgradeCandidateInput { id: string; raw: string; slot?: LoadoutSlot; search?: UpgradeSearchSnapshot }
+export interface UpgradeMarketQuote { id: string; amount: number; currency: string; sampledAt: string }
+export interface UpgradeCandidateInput { id: string; raw: string; slot?: LoadoutSlot; search?: UpgradeSearchSnapshot; quote?: UpgradeMarketQuote }
 // Quotes and UI selection do not change the combat context; all gear, goals and calibration do.
 function contextKey(state: LoadoutState) { return JSON.stringify({ slots: state.slots, weaponSet: activeWeaponSet(state), goals: state.goals, source: state.source, character: state.character, socketEvidence: state.socketEvidence }); }
 export function captureUpgradeSearch(context: LoadoutContext | undefined, rows: readonly EquipmentTradeRow[]): UpgradeSearchSnapshot | undefined {

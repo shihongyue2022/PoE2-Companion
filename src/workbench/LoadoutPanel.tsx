@@ -35,7 +35,10 @@ import { activeWeaponSet, switchWeaponSet, weaponPair } from './weaponSets';
 import PobWeaponSync from './PobWeaponSync';
 import WeaponContributionPanel from './WeaponContributionPanel';
 import type { SkillAffixSearch } from './skillAffixGuide';
-import type { SkillInspection } from './SkillAffixGuidePanel';
+import SkillAffixGuidePanel, { type SkillInspection } from './SkillAffixGuidePanel';
+import { skillSelectionKey } from './skillRoutine';
+import UpgradePlanPanel from './UpgradePlanPanel';
+import { protectedReplacementError } from './upgradePlans';
 
 export interface LoadoutPanelProps {
   onPrice: (raw: string, intent?: 'price' | 'upgrade', slot?: LoadoutSlot) => void;
@@ -88,9 +91,12 @@ export default function LoadoutPanel({ onPrice, onCraft, league, candidate: inco
   const [socketCounts, setSocketCounts] = useState<{ before?: { raw: string; filled: number }; after?: { raw: string; filled: number }; scenario?: boolean }>({});
   const [backupText, setBackupText] = useState('');
   const [skillInspection, setSkillInspection] = useState<SkillInspection>();
+  const displayedInspection = skillInspection && loadout.goals.mainSkill && skillSelectionKey(skillInspection.selection) === skillSelectionKey(loadout.goals.mainSkill)
+    ? { ...skillInspection, selection: loadout.goals.mainSkill } : skillInspection;
   const importEntry = useRef<HTMLDivElement>(null), directionEntry = useRef<HTMLDivElement>(null), calibrationEntry = useRef<HTMLDivElement>(null), comparisonEntry = useRef<HTMLDetailsElement>(null);
   const selectedItem = useMemo(() => parseEquipment(loadout.slots[selected] ?? ''), [loadout.slots, selected]);
   const candidate = useMemo(() => parseEquipment(candidateText), [candidateText]);
+  const protectedCandidateError = candidate ? protectedReplacementError(loadout, selected, candidate) : undefined;
   const beforeFilled = selectedItem ? knownFilledSockets(loadout, selectedItem, socketCounts.before?.raw === selectedItem.raw ? socketCounts.before.filled : undefined) : undefined;
   const afterFilled = candidate ? knownFilledSockets(loadout, candidate, socketCounts.after?.raw === candidate.raw ? socketCounts.after.filled : undefined) : undefined;
   const capturedRows = comparisonSearchRows(incoming?.search, loadout, selected);
@@ -129,6 +135,7 @@ export default function LoadoutPanel({ onPrice, onCraft, league, candidate: inco
     setNotice(`候选已识别为${slotLabel(target)}，已自动切换到${slotLabel(target)}比较；尚未替换任何装备。`);
   }
   function importToSlot(raw: string, fromCandidate = false) {
+    if (fromCandidate && protectedCandidateError) { setError(protectedCandidateError); return; }
     const result = equipRaw(loadout, selected, raw, fromCandidate ? { beforeFilledSockets: beforeFilled, afterFilledSockets: afterFilled, socketScenario: socketCounts.scenario } : {});
     if (!result.ok) { setError(result.error); setNotice(''); return; }
     if (!save(result.state)) return;
@@ -169,7 +176,7 @@ export default function LoadoutPanel({ onPrice, onCraft, league, candidate: inco
       <p className="lo-footnote">{damageSkill(loadout)?.label ? `主技能：${damageSkill(loadout)!.label} · ` : ''}{resistanceBaseline(loadout)?.origin ?? '请导入 PoB2 总抗性或录入当前游戏面板'}。抗性溢出、生命和防御不增加伤害分；最终技能伤害用 PoB2 换装计算验证。</p></div>}
     <nav className="lo-workflow" aria-label="配装提升流程">
       <button type="button" onClick={() => reveal(importEntry.current, 'button')}><Icon name="paste" /><strong>导入角色</strong><small>{equippedCount ? `已记录 ${equippedCount} 件 · 更新快照` : '读取 PoB2 / 本机 BD'}</small></button>
-      <button type="button" onClick={() => reveal(directionEntry.current, 'select')}><Icon name="sliders" /><strong>确认方向</strong><small>{damageSkill(loadout)?.label ?? '选择主输出技能'}</small></button>
+      <button type="button" onClick={() => reveal(directionEntry.current, '.sr-heading-actions button')}><Icon name="sliders" /><strong>确认方向</strong><small>{loadout.goals.skillBar?.length ? `${loadout.goals.skillBar.length} 个实际技能` : '定义实际使用的技能组'}</small></button>
       <button type="button" onClick={() => reveal(calibrationEntry.current?.querySelector('details') ?? null)}><Icon name="check" /><strong>校准抗性</strong><small>{resistanceBaseline(loadout)?.origin ?? '补齐角色总值与上限'}</small></button>
       <button type="button" disabled={!selectedItem} onClick={() => { if (selectedItem) onPrice(selectedItem.raw, 'upgrade', selected); }}><Icon name="search" /><strong>寻找升级</strong><small>{selectedItem ? `搜索${slotLabel(selected)}` : '先点选已装备栏位'}</small></button>
       <button type="button" onClick={() => reveal(comparisonEntry.current, 'textarea')}><Icon name="equipment" /><strong>比较候选</strong><small>{candidate ? '候选已就位 · 确认后替换' : '粘贴或从市场加入'}</small></button>
@@ -181,14 +188,16 @@ export default function LoadoutPanel({ onPrice, onCraft, league, candidate: inco
         setNotice('已导入所选 PoB2 装备组，原角色面板基准已清除。请核对预览中的未解析效果。');
       }} />
       <details className="lo-import-availability"><summary>参考 BD 与本机游戏资料</summary><LocalGameDataPanel characterLevel={loadout.source?.level} onBuild={(profile) => {
-        if (save({ ...loadout, goals: { ...loadout.goals, build: profile, mainSkill: { source: 'bd' }, priorities: profile.metrics } })) setNotice(`已采用「${profile.main.label}」的 BD 配装方向，可选择栏位查看建议或寻找升级。`);
+        if (save({ ...loadout, goals: { ...loadout.goals, build: profile, mainSkill: loadout.goals.skillBar !== undefined ? loadout.goals.mainSkill : { source: 'bd' }, priorities: profile.metrics } })) setNotice(loadout.goals.skillBar !== undefined ? '已采用参考 BD，实际输出技能组与检索重点保留。' : `已采用「${profile.main.label}」的 BD 配装方向，可选择栏位查看建议或寻找升级。`);
       }} /></details>
       <details className="lo-import-availability"><summary>能直接连接官方账号同步吗？</summary>
         <p>本工坊目前未接入官方账号授权。GGG 官方角色接口支持 PoE2 装备读取，但截至 2026-10-22，官网暂停受理新应用注册，尚不能为本项目开通新的账号直连。当前可用方式为 PoB2 代码或 XML 导入；导入的是导出时的快照，不会随游戏自动同步。</p>
         <a href="https://www.pathofexile.com/developer/docs#getting-started" target="_blank" rel="noreferrer">查看 GGG 官方注册说明 ↗</a>
       </details>
     </section></div>
-    <div ref={directionEntry} className="lo-workflow-direction"><SkillRecommendationPanel state={loadout} onSave={save} onInspect={(selection, focusSupport) => setSkillInspection({ selection, focusSupport })} /></div>
+    <div ref={directionEntry} className="lo-workflow-direction"><SkillRecommendationPanel state={loadout} onSave={save} inspection={displayedInspection} onCloseInspection={() => setSkillInspection(undefined)} onInspect={(selection, focusSupport) => setSkillInspection({ selection, focusSupport })}>
+      {displayedInspection && <SkillAffixGuidePanel key={JSON.stringify([displayedInspection, loadout.goals.skillBar])} state={loadout} inspection={displayedInspection} data={recommendationData} trade={recommendationTrade} onSave={save} onSearch={onSkillSearch} onClose={() => setSkillInspection(undefined)} />}
+    </SkillRecommendationPanel></div>
     <PobResistanceSync active={active} />
     <PobWeaponSync active={active} />
     {currentResistances && <section className="lo-current-resistances" aria-label="当前整套抗性"><strong>当前整套抗性</strong>{currentResistances.rows.map((row) => <span key={row.key} className={row.met === false ? 'negative' : ''}>{row.label}：{row.effectiveAfter !== undefined ? `${format(row.effectiveAfter)}%` : row.after !== undefined ? `${format(row.after)}%（总值）` : '未知'} / {row.cap === undefined ? '上限未导出' : `${row.cap}%`}{row.overflowAfter !== undefined ? ` · 溢出 ${format(row.overflowAfter)}%` : ''}</span>)}<small>全元素不含混沌；已换装部分按累计差值推算。{loadout.socketEvidence?.some((entry) => entry.assumed) ? '镶嵌包含满孔情景，请核对实际数量。' : ''}</small>{currentResistances.rows.some((row) => row.cap === undefined) && <button type="button" className="wb-button" onClick={() => save({ ...loadout, goals: { ...loadout.goals, resistanceCaps: Object.fromEntries(RESISTANCE_KEYS.map((key) => [key, 75])) } })}>确认我的四项抗性上限均为 75%</button>}</section>}
@@ -214,7 +223,8 @@ export default function LoadoutPanel({ onPrice, onCraft, league, candidate: inco
         {warnings.length > 0 && <ul className="lo-warnings">{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
         <WeaponContributionPanel state={loadout} />
         <details className="lo-backup"><summary>角色来源与更新记录{loadout.lastImport?.equipmentChanges ? ` · ${loadout.lastImport.equipmentChanges} 栏变化` : ''}</summary><LoadoutSourcePanel state={loadout} /></details>
-        <CharacterAnalysisPanel state={loadout} onSave={save} onSelectSlot={selectSlot} recommendationData={recommendationData} recommendationTrade={recommendationTrade} onSkillSearch={onSkillSearch} inspection={skillInspection} onInspectionChange={setSkillInspection} />
+        <UpgradePlanPanel state={loadout} candidate={incoming} slot={selected} data={recommendationData} trade={recommendationTrade} onSave={save} onPrice={onPrice} />
+        <CharacterAnalysisPanel state={loadout} onSave={save} onSelectSlot={selectSlot} recommendationData={recommendationData} recommendationTrade={recommendationTrade} onSkillSearch={onSkillSearch} onInspectionChange={(inspection) => { setSkillInspection(inspection); directionEntry.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }} />
         <LoadoutQuoteSummary state={loadout} league={league ?? 'Forbidden Rites'} />
         <details className="lo-summary"><summary>装备贡献合计（非角色面板）</summary>
           <p className="lo-footnote">下列生命、护盾、护甲等属于装备贡献；角色最终面板请在下方录入，不能直接按同一数值比较。</p>
@@ -310,7 +320,8 @@ export default function LoadoutPanel({ onPrice, onCraft, league, candidate: inco
             {comparison.targets.length > 0 && <div className="lo-target-results"><h4>替换后的全套抗性目标</h4>{comparison.targets.map((target) => <p key={target.key} className={target.met ? 'positive' : 'negative'}>{target.label} {format(target.before)} → {format(target.after)}% / 目标 {target.minimum}% · {target.met ? '达标' : '未达标'}</p>)}</div>}
 
             <p className="lo-footnote">武器 DPS 来自物品已显示的伤害范围 × 每秒攻击次数，不是技能或流派 DPS。百分比词缀、条件效果和未识别内容不作为零收益。估值不会参与升级判定。</p>
-            <div className="lo-actions"><button type="button" className="wb-button primary" disabled={!comparison.canEquip || comparison.sameItemText} onClick={() => importToSlot(candidateText, true)}>{comparison.sameItemText ? '无需替换：相同装备文本' : `采用候选并替换${slotLabel(selected)}`}</button><button type="button" className="wb-button" onClick={() => onPrice(candidate.raw, 'price')}>估价候选</button></div>
+            {protectedCandidateError && <p role="alert" className="lo-alert">{protectedCandidateError}</p>}
+            <div className="lo-actions"><button type="button" className="wb-button primary" disabled={!comparison.canEquip || comparison.sameItemText || !!protectedCandidateError} onClick={() => importToSlot(candidateText, true)}>{comparison.sameItemText ? '无需替换：相同装备文本' : `采用候选并替换${slotLabel(selected)}`}</button><button type="button" className="wb-button" onClick={() => onPrice(candidate.raw, 'price')}>估价候选</button></div>
           </>}
           {!candidateText && <p className="lo-footnote">对比会同时保留当前装备，只有点击「采用候选」才替换本栏记录。</p>}
         </section></details>

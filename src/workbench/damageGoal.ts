@@ -33,7 +33,7 @@ function offensive(mod: EquipmentMod, tags: readonly string[]) {
 /** Resistances are constraints. Non-offensive life/defence/overflow never enter the score. */
 export function damageGoalRows(rows: readonly EquipmentTradeRow[], equipment: Equipment, state: LoadoutState): EquipmentTradeRow[] {
   const plan = skillPlan(state);
-  if (state.goals.mainSkill && !plan) return rows.map((row) => ({ ...row, weight: '0' }));
+  if ((state.goals.mainSkill || state.goals.skillBar !== undefined) && !plan) return rows.map((row) => ({ ...row, weight: '0' }));
   const tags = plan?.tags ?? (equipment.slot === 'weapon' && !/wand|sceptre|staff/.test(equipment.category) ? ['attack'] : []);
   return rows.map((row) => {
     const mod = equipment.mods.find((entry) => `mod:${entry.key}` === row.key) ?? (row.scoringRef ? { ref: row.scoringRef } : undefined);

@@ -20,3 +20,14 @@ export function linkedGuideState() {
   set.groups.push({ ...main, index: 5, gems: [{ ...main.gems[0]!, id: 'Metadata/Items/Gems/SkillGemWhirlingSlash', skillId: 'WhirlingSlashPlayer', name: 'Whirling Slash' }] });
   return state;
 }
+
+export function threeSkillRoutineState() {
+  const state = linkedGuideState(), combat = state.source!.combat!, set = combat.sets.find((entry) => entry.id === combat.activeSet)!;
+  const template = set.groups.find((entry) => entry.index === combat.mainGroup)!;
+  const gem = template.gems[0]!;
+  set.groups.push({ ...template, index: 6, gems: [{ ...gem, id: 'Metadata/Items/Gems/SkillGemExplosiveSpear', skillId: 'ExplosiveSpearPlayer', name: 'Explosive Spear' },
+    { ...gem, id: '', skillId: '', name: 'Fire Penetration II' }] });
+  set.groups.push({ ...template, index: 7, gems: [{ ...gem, id: 'Metadata/Items/Gems/SkillGemLightningSpear', skillId: 'LightningSpearPlayer', name: 'Lightning Spear' }] });
+  combat.mainGroup = 7;
+  return state;
+}

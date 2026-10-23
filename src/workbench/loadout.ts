@@ -9,6 +9,8 @@ import { assessDamageGoal, damageGoalRows, usesDamageGoal, type DamageGoalAssess
 import { equipmentTradeRows } from './genericEquipmentTrade';
 import type { EquipmentTradeRow } from './genericEquipmentTrade';
 import { readMainSkillSelection, type MainSkillSelection } from './skillRecommendation';
+import { readSkillRoutine } from './skillRoutine';
+import { readWorkflow, type WorkflowPreferences } from './workflowPreferences';
 import { knownFilledSockets, recordSocketEvidence, type SocketEvidence, type ResistanceContext } from './resistanceModel';
 import { readWeaponPair, syncWeaponSets } from './weaponSets';
 
@@ -70,6 +72,8 @@ export interface LoadoutGoals {
   minimums: Partial<Record<ResistanceKey, number>>;
   build?: BuildProfile;
   mainSkill?: MainSkillSelection;
+  skillBar?: MainSkillSelection[];
+  workflow?: WorkflowPreferences;
 }
 export interface LoadoutState {
   lastImport?: { at: string; equipmentChanges: number; formatOnly: number; newlyRead: number; informationChanges: number };
@@ -335,6 +339,9 @@ export function deserializeLoadout(text: string): { state: LoadoutState | null; 
       state.goals.resistanceCaps = caps;
     }
     state.goals.mainSkill = readMainSkillSelection(goals.mainSkill);
+    const routine = readSkillRoutine(goals.skillBar);
+    if (routine !== undefined) state.goals.skillBar = routine;
+    const workflow = readWorkflow(goals.workflow); if (workflow) state.goals.workflow = workflow;
     if (goals.objective === 'balanced' || goals.objective === 'capped-damage') state.goals.objective = goals.objective;
     const build = readBuildProfile(goals.build); if (build) state.goals.build = build;
     if (Array.isArray(goals.priorities)) state.goals.priorities = [...new Set(goals.priorities.filter((key): key is MetricKey => typeof key === 'string' && isMetricKey(key)))];

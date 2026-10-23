@@ -1,49 +1,51 @@
+import { useState } from 'react';
 import { expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SkillRecommendationPanel from './SkillRecommendationPanel';
-import { damageState } from './fixtures/damageGoal';
 import type { LoadoutState } from './loadout';
-import { mainSkillChoices } from './skillRecommendation';
-import { linkedGuideState } from './fixtures/skillAffixGuide';
+import { threeSkillRoutineState } from './fixtures/skillAffixGuide';
+import { setSkillRoutine, twisterRoutinePreset } from './skillRoutine';
 
-it('persists explicit main-skill selection without changing gear, saved combat or resistance calibration', async () => {
-  const state = damageState(), save = vi.fn<(state: LoadoutState) => boolean>(() => true), user = userEvent.setup();
+it('does not present saved Lightning Spear as the actual rotation and adopts the verified three-skill preset', async () => {
+  const state = threeSkillRoutineState(), save = vi.fn<(state: LoadoutState) => boolean>(() => true), user = userEvent.setup();
   render(<SkillRecommendationPanel state={state} onSave={save} />);
-  expect(screen.getByText('智能配装 · 闪电长矛')).toBeVisible();
-  const select = screen.getByRole('combobox', { name: '智能配装主输出技能' });
-  await user.selectOptions(select, 'pob:2:3');
-  const updated = save.mock.calls[0]![0];
-  expect(updated.goals.mainSkill).toMatchObject({ source: 'pob', setId: '2', group: 3, name: 'Lightning Spear' });
-  expect(updated.slots).toEqual(state.slots);
-  expect(updated.source).toEqual(state.source);
-  expect(updated.character).toEqual(state.character);
-  await user.selectOptions(select, '');
-  expect(save.mock.calls[1]![0].goals.mainSkill).toBeUndefined();
-});
-it('selects a companion group through an official-art button and saves only the recommendation plan', async () => {
-  const state = linkedGuideState(), save = vi.fn<(state: LoadoutState) => boolean>(() => true), user = userEvent.setup();
-  render(<SkillRecommendationPanel state={state} onSave={save} />);
-  await user.click(screen.getByText('联动技能组'));
-  const button = screen.getByRole('button', { name: /联动：.*第 5 组/ });
-  expect(button.querySelector('img')).toHaveAttribute('src', expect.stringMatching(/^\/images\/skills\/.*\.png$/));
-  await user.click(button);
+  expect(within(screen.getByRole('group', { name: '实际使用的技能组' })).queryByRole('button', { name: /展开技能/ })).toBeNull();
+  expect(screen.getByRole('button', { name: '查看增伤词缀与部位' })).toBeDisabled();
+  await user.click(screen.getByRole('button', { name: '编辑技能组' }));
+  await user.click(screen.getByRole('button', { name: '采用旋风三技能组合' }));
   const next = save.mock.calls[0]![0];
-  expect(next.goals.mainSkill).toMatchObject({ name: 'Twister', links: [{ group: 5, name: 'Whirling Slash' }] });
-  expect(next.slots).toEqual(state.slots); expect(next.source).toEqual(state.source);
+  expect(next.goals.skillBar!.map((entry) => entry.name)).toEqual(['Twister', 'Explosive Spear', 'Whirling Slash']);
+  expect(next.goals.mainSkill!.name).toBe('Twister');
+  expect(next.source).toEqual(state.source); expect(next.slots).toEqual(state.slots);
 });
-it('keeps distinct active skills in the same group selectable and opens the chosen skill without changing the build', async () => {
-  const state = damageState(), combat = state.source!.combat!;
-  const group = combat.sets.find((entry) => entry.id === '2')!.groups[2]!, original = group.gems[0]!;
-  group.gems.unshift({ ...original, id: 'Metadata/Items/Gems/SkillGemTwister', skillId: 'TwisterPlayer', name: 'Twister' });
-  const choices = mainSkillChoices(state).filter((entry) => entry.selection.setId === '2' && entry.selection.group === 3);
-  expect(choices).toHaveLength(2);
-  expect(new Set(choices.map((entry) => entry.key)).size).toBe(2);
-  state.goals.mainSkill = choices.find((entry) => entry.selection.name === 'Lightning Spear')!.selection;
+it('opens skill detail without saving or switching equipment-search focus', async () => {
+  const initial = threeSkillRoutineState(), preset = twisterRoutinePreset(initial, '2')!, state = setSkillRoutine(initial, preset, preset[0]);
   const save = vi.fn(), inspect = vi.fn(), user = userEvent.setup();
   render(<SkillRecommendationPanel state={state} onSave={save} onInspect={inspect} />);
-  expect(screen.getByRole('combobox', { name: '智能配装主输出技能' })).toHaveValue(choices.find((entry) => entry.selection.name === 'Lightning Spear')!.key);
-  await user.click(screen.getByRole('button', { name: '查看增伤词缀与部位' }));
-  expect(inspect).toHaveBeenCalledWith(state.goals.mainSkill);
-  expect(save).not.toHaveBeenCalled();
+  const bar = screen.getByRole('group', { name: '实际使用的技能组' });
+  await user.click(within(bar).getByRole('button', { name: '展开技能：爆炸长矛' }));
+  expect(inspect).toHaveBeenCalledWith(preset[1]); expect(save).not.toHaveBeenCalled();
+  expect(state.goals.mainSkill!.name).toBe('Twister');
+});
+it('supports real drag data, click-to-add, keyboard-friendly reorder and removal without duplicating skills', async () => {
+  const initial = threeSkillRoutineState(), save = vi.fn<(state: LoadoutState) => boolean>(() => true), user = userEvent.setup();
+  function Harness() {
+    const [state, update] = useState(initial);
+    return <SkillRecommendationPanel state={state} onSave={(next) => { update(next); return save(next); }} />;
+  }
+  render(<Harness />);
+  await user.click(screen.getByRole('button', { name: '编辑技能组' }));
+  const library = screen.getByRole('group', { name: '可拖入的技能库' }), bar = screen.getByRole('group', { name: '实际使用的技能组' });
+  const data: Record<string, string> = {}, transfer = { types: ['application/x-poe2-routine-skill'], setData: (type: string, value: string) => { data[type] = value; }, getData: (type: string) => data[type] ?? '', effectAllowed: 'move' };
+  fireEvent.dragStart(within(library).getByRole('button', { name: /添加技能：旋风 · 第 3 组/ }).parentElement!, { dataTransfer: transfer });
+  fireEvent.drop(bar, { dataTransfer: transfer });
+  await user.click(within(library).getByRole('button', { name: /添加技能：爆炸长矛/ }));
+  await user.click(within(library).getByRole('button', { name: /添加技能：爆炸长矛/ }));
+  expect(bar.querySelectorAll('.sr-slot')).toHaveLength(2);
+  await user.click(screen.getByRole('button', { name: '后移旋风' }));
+  expect(save.mock.calls.at(-1)![0].goals.skillBar!.map((entry) => entry.name)).toEqual(['Explosive Spear', 'Twister']);
+  expect(save.mock.calls.at(-1)![0].goals.mainSkill!.name).toBe('Twister');
+  await user.click(screen.getByRole('button', { name: '移出旋风' }));
+  expect(save.mock.calls.at(-1)![0].goals.mainSkill!.name).toBe('Explosive Spear');
 });
