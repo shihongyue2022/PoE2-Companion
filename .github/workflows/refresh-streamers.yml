@@ -24,6 +24,7 @@ on:
 
 jobs:
   refresh:
+    if: github.repository == 'Dboire9/POE2_HTC' || github.event_name == 'workflow_dispatch'
     name: Fetch streamer gear and open a PR
     runs-on: ubuntu-latest
 

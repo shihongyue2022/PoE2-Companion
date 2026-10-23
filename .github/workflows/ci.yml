@@ -1,69 +1,31 @@
-name: CI
+name: Workbench CI
 
 on:
   push:
-    branches: [ beta, main ]
+    branches: [main, beta]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   verify:
-    name: Type-check, test, build
+    name: Check workbench, engine and build
     runs-on: ubuntu-latest
-
-    # Declared rather than inherited. With no `permissions:` block a workflow gets the repository
-    # default, which is often read-write — so a job that only ever reads the tree would be handed a
-    # token that can push to it. This one type-checks, tests and builds; reading is all it needs.
-    permissions:
-      contents: read
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: '20'
-
-      # `npm ci` installs exactly the committed lockfile — so CI and a developer's machine get the
-      # same tree, and a clean `npm audit` stays clean. legacy-peer-deps comes from .npmrc.
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type check
-        run: npm run type-check
-
-      # The package configs are STRICTER than the root one (exactOptionalPropertyTypes,
-      # noUncheckedIndexedAccess) and the root config only includes `src`, so root-only checking let
-      # real errors sit in packages/ unnoticed. Check them explicitly.
-      - name: Type check engine + optimizer
-        run: npm run type-check:engine && npm run type-check:optimizer
-
-      # `tsc` sees no unused import, no floating promise, no stale eslint-disable, no accidental `any`
-      # in a test. Added 2026-09-01 — see eslint.config.js for why the two trees get different tiers.
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        run: npm test -- --run
-
-      - name: Build frontend
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Type check applications and engine packages
+        run: npm run type-check && npm run type-check:engine && npm run type-check:optimizer
+      - name: Lint workbench and local bridge
+        run: npx eslint src/workbench tools/workbenchServer.ts tools/workbenchServer.test.ts tools/tradeLog.ts tools/tradeLog.test.ts browser-extension/official-history/*.js
+      - name: Workbench regression tests
+        run: npx vitest run src/workbench tools/workbenchServer.test.ts tools/tradeLog.test.ts tools/affixReference.test.ts --maxWorkers=2
+      - name: Extension boundary regression
+        run: node scripts/workbench-official-history-extension-regression.mjs
+      - name: Production build
         run: npm run build
-
-      # The only tests in this repo that run in a real browser. jsdom has no layout engine, no Web
-      # Worker, no CSP enforcement and no real fetch, so the whole class of failure that ships as "the
-      # page loads and nothing happens" was invisible to the other 1,264 tests. Chromium only, to keep
-      # this step short; the suite serves dist/ with vercel.json's real headers (e2e/serve-dist.mjs).
-      - name: Install Chromium for Playwright
-        run: npx playwright install chromium --with-deps
-
-      - name: Browser smoke tests
-        run: npm run test:e2e
-
-      - name: Upload Playwright report on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7

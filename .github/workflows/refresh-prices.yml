@@ -55,6 +55,8 @@ on:
 
 jobs:
   refresh:
+    # Keep upstream's scheduled maintenance opt-in for this independent project.
+    if: github.repository == 'Dboire9/POE2_HTC' || github.event_name == 'workflow_dispatch'
     name: Fetch poe.ninja and open a PR
     runs-on: ubuntu-latest
 
