@@ -236,7 +236,7 @@ npm.cmd run build
 
 ## 来源与许可
 
-本项目在 [POE2_HTC](https://github.com/Dboire9/POE2_HTC) 本地检出基础上修改，独立公开仓库为 [PoE2-Workbench](https://github.com/shihongyue2022/PoE2-Workbench)；历史说明保留在 `README.upstream.md`，原许可证、引擎、测试及提交历史保留。上游检出提交见 `UPSTREAM.txt`。
+本项目在 [POE2_HTC](https://github.com/Dboire9/POE2_HTC) 本地检出基础上修改，独立公开仓库为 [PoE2-Companion](https://github.com/shihongyue2022/PoE2-Companion)；历史说明保留在 `README.upstream.md`，原许可证、引擎、测试及提交历史保留。上游检出提交见 `UPSTREAM.txt`。
 
 中文属性映射派生自 Exiled Exchange 2 的 MIT 数据，简繁转换的小型表来自 OpenCC 的 Apache-2.0 数据。来源、固定提交和完整许可文本保存在 `src/workbench/data/`。本地改动不会自动提交或推送到上游。
 

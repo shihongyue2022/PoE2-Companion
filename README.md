@@ -1,6 +1,6 @@
-# PoE2 Workbench · 配装与制作工坊
+# PoE2 Companion · 配装、查价与制作助手
 
-[![CI](https://github.com/shihongyue2022/PoE2-Workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/shihongyue2022/PoE2-Workbench/actions/workflows/ci.yml)
+[![CI](https://github.com/shihongyue2022/PoE2-Companion/actions/workflows/ci.yml/badge.svg)](https://github.com/shihongyue2022/PoE2-Companion/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue)](LICENSE)
 
 面向《流放之路 2》国际服的本地工具：导入整套角色装备，按 BD 和主技能寻找升级，按核心词缀的相近数值档位查价，比较换装，再规划制作路线。
@@ -12,8 +12,8 @@
 需要 Windows 与 Node.js 20.19+ 或 22.12+。
 
 ```powershell
-git clone https://github.com/shihongyue2022/PoE2-Workbench.git
-cd PoE2-Workbench
+git clone https://github.com/shihongyue2022/PoE2-Companion.git
+cd PoE2-Companion
 npm.cmd ci
 .\start-workbench.cmd
 ```
@@ -62,7 +62,7 @@ npm.cmd run build
 
 真实浏览器回归脚本位于 `scripts/workbench-*.mjs`。整合通路测试使用隔离样例，不读取用户浏览器登录态，运行方式见 [操作通路的验证说明](docs/WORKFLOW.md#验证)。开发服务器和项目预览提供本地 API，单独托管静态 `dist` 不能提供本机 PoB2、日志读取和后台查价能力。
 
-问题与建议请提交到 [本仓库 Issues](https://github.com/shihongyue2022/PoE2-Workbench/issues)。
+问题与建议请提交到 [本仓库 Issues](https://github.com/shihongyue2022/PoE2-Companion/issues)。
 
 ## 来源与许可证
 
