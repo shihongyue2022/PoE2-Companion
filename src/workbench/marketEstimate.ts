@@ -1,4 +1,5 @@
 import type { FlexibleTradeDocument } from './tradeSearch';
+import { requireLocalService } from './workbenchRuntime';
 import { localizeEquipmentName, localizeEquipmentStat } from './genericEquipment';
 import tradeItems from './data/trade-item-index.json';
 
@@ -278,6 +279,7 @@ export async function fetchMarketEstimate(
   league: string,
   signal?: AbortSignal,
 ): Promise<MarketEstimateResult> {
+  requireLocalService();
   const response = await fetch('/api/workbench/estimate', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ league, search: query }), signal,

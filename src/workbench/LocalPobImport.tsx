@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import Icon from './WorkbenchIcon';
+import { HOSTED_WORKBENCH, LOCAL_SERVICE_MESSAGE } from './workbenchRuntime';
 
 interface SavedBuild { id: string; name: string; modifiedAt: string; size: number }
 async function request(path: string, body?: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
@@ -15,7 +16,10 @@ async function request(path: string, body?: unknown, signal?: AbortSignal): Prom
   }
   return value;
 }
-export default function LocalPobImport({ onRead, disabled, currentFile, savedAt }: { onRead: (xml: string, file?: { name: string; modifiedAt?: string }) => Promise<void>; disabled?: boolean; currentFile?: string; savedAt?: string }) {
+export default function LocalPobImport(props: Parameters<typeof LocalPobImportClient>[0]) {
+  return HOSTED_WORKBENCH ? <p className="lo-footnote">{LOCAL_SERVICE_MESSAGE}</p> : <LocalPobImportClient {...props} />;
+}
+function LocalPobImportClient({ onRead, disabled, currentFile, savedAt }: { onRead: (xml: string, file?: { name: string; modifiedAt?: string }) => Promise<void>; disabled?: boolean; currentFile?: string; savedAt?: string }) {
   const [builds, setBuilds] = useState<SavedBuild[]>([]);
   const [selected, setSelected] = useState('');
   const [busy, setBusy] = useState(false), [listed, setListed] = useState(false);

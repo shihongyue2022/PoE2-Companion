@@ -11,6 +11,8 @@
 
 > 当前提供的是机制资料、已识别词缀的方向评分、整套四抗和购买成本核对。完整技能循环 DPS、逐条词缀的精确伤害贡献排名尚未接入 PoB 重算，不能把方向分当作实际增伤百分比。
 
+**[直接打开浏览器版](https://shihongyue2022.github.io/apps/poe2-companion/)**：运行实际工坊，支持上传 PoB2 XML／分享代码、技能组、装备比较、官网检索条件及制作计算。自动读档、桌面快捷键、日志、后台挂牌与成交同步需要下方本地版；在线记录保存在当前浏览器，与本地版不自动同步。
+
 ## 启动
 
 需要 Windows 和 Node.js **20.19+ 或 22.12+**。导入官网角色还需安装 Path of Building（PoE2）；官方成交同步可选安装 Chrome／Edge 同步扩展。
@@ -127,6 +129,8 @@ node scripts/workbench-default-workflow-regression.mjs
 前者验证技能组操作与词缀检索通路，后者验证市场报价回流、两件补抗、总预算与组合采用。更多验证说明见 [日常操作通路](docs/WORKFLOW.md#验证)。
 
 开发服务器与 `npm.cmd run preview` 提供本地 API；单独静态托管 `dist` 无法提供本机 PoB2、日志读取与后台查价能力。
+
+静态托管可设置 `VITE_WORKBENCH_HOSTED=1`，并用 `VITE_WORKBENCH_BASE=/apps/poe2-companion/` 指定挂载路径后构建。此模式不探测访问者的本机服务，将交易查询交给生成的官网链接。构建产物仍是实际应用，不是案例示例；本地版构建不设置这些变量。
 
 - [日常操作通路](docs/WORKFLOW.md)：逐步操作与数据源说明。
 - [WORKBENCH.md](WORKBENCH.md)：功能、运行与实现细节。

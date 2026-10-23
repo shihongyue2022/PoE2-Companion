@@ -1,3 +1,4 @@
+import { HOSTED_WORKBENCH } from './workbenchRuntime';
 export interface CompanionPacket { id: string; raw: string; mode: 'trade' | 'checkpoint'; createdAt: string; deliveryToken?: string }
 export interface CompanionSummary { status: 'ready' | 'error'; message: string; detail?: string; url?: string }
 
@@ -12,6 +13,7 @@ function packetOf(value: unknown): CompanionPacket | null {
 
 /** An explicit item link can reopen a completed price check without replaying its task. */
 export async function loadCompanionView(search: string, signal: AbortSignal): Promise<CompanionPacket | null> {
+  if (HOSTED_WORKBENCH) return null;
   const id = new URLSearchParams(search).get('equipment');
   if (!id) return null;
   const response = await fetch(`/api/workbench/companion-view?id=${encodeURIComponent(id)}`, { signal });
@@ -24,6 +26,7 @@ export async function loadCompanionView(search: string, signal: AbortSignal): Pr
 
 /** SSE keeps the in-game shortcut responsive while the browser tab is in the background. */
 export function subscribeCompanion(onPacket: (packet: CompanionPacket) => void): () => void {
+  if (HOSTED_WORKBENCH) return () => {};
   let last = '';
   let lastToken = '';
   let closed = false;
@@ -59,6 +62,7 @@ export function subscribeCompanion(onPacket: (packet: CompanionPacket) => void):
 }
 
 export async function publishCompanion(id: string, summary: CompanionSummary, deliveryToken?: string): Promise<void> {
+  if (HOSTED_WORKBENCH) return;
   try {
     await fetch('/api/workbench/companion-result', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, ...summary, deliveryToken }) });

@@ -3,8 +3,12 @@ import { HISTORY_SKIP_LABELS, historyBridge, parseOfficialHistory } from './offi
 import { collectTrades, type FinanceState } from './finance';
 import { applyTradeImport } from './tradeImport';
 import Icon from './WorkbenchIcon';
+import { HOSTED_WORKBENCH, WORKBENCH_SOURCE } from './workbenchRuntime';
 
-export default function OfficialHistoryPanel({ league, state, save, active = true, onSynced }: { league: string; state: FinanceState; save: (next: FinanceState, message?: string) => boolean; active?: boolean; onSynced?: (next: FinanceState) => void }) {
+export default function OfficialHistoryPanel(props: Parameters<typeof OfficialHistoryClient>[0]) {
+  return HOSTED_WORKBENCH ? <section className="tt-official wb-card" aria-label="官方成交同步"><h3>官方成交同步 · 本地版功能</h3><p className="wb-fine">浏览器版支持成交 CSV、粘贴密语和记账；自动同步需要在本地工坊安装同步桥。</p><a className="wb-link" href={WORKBENCH_SOURCE + '#启动'} target="_blank" rel="noreferrer">获取本地版 ↗</a></section> : <OfficialHistoryClient {...props} />;
+}
+function OfficialHistoryClient({ league, state, save, active = true, onSynced }: { league: string; state: FinanceState; save: (next: FinanceState, message?: string) => boolean; active?: boolean; onSynced?: (next: FinanceState) => void }) {
   const [ready, setReady] = useState(false), [busy, setBusy] = useState(false), [automatic, setAutomatic] = useState(false), [notice, setNotice] = useState('');
   const [retry, setRetry] = useState(0);
   const [waiting, setWaiting] = useState(false), [version, setVersion] = useState('');

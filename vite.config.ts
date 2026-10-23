@@ -162,7 +162,7 @@ export default defineConfig({
     preloadPatchData(),
     ...(analyze ? [visualizer({ filename: "dist/stats.html", gzipSize: true, brotliSize: false })] : []),
   ],
-  base: "./",
+  base: process.env.VITE_WORKBENCH_BASE || "./",
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

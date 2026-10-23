@@ -1,4 +1,5 @@
 import type { ItemState, PatchData } from '../../packages/engine/src/types.ts';
+import { HOSTED_WORKBENCH } from './workbenchRuntime';
 import { gearSearch, loadGearTrade, slotsOfTargets, type GearTrade, type WantedMod } from '../lib/gearTrade.ts';
 import { tradeUrl, type TradeSearch } from '../lib/tradeLink.ts';
 import priceSnapshot from '../../data/patches/0.5.0/prices.json';
@@ -172,6 +173,7 @@ export function parseTradeLeagues(payload: unknown): TradeLeague[] {
 
 /** One deliberate live request through the local Vite proxy; callers retain editable manual input. */
 export async function fetchTradeLeagues(signal?: AbortSignal): Promise<TradeLeague[]> {
+  if (HOSTED_WORKBENCH) return [];
   const response = await fetch('/api/poe/leagues', { signal, headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error(`无法获取官方赛季（HTTP ${response.status}），可手动填写赛季名称。`);
   return parseTradeLeagues(await response.json() as unknown);

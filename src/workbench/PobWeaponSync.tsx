@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { HOSTED_WORKBENCH } from './workbenchRuntime';
 import { useSavedLoadout, writeSavedLoadout } from './loadoutStore';
 import { readOriginalLocalPob } from './pobRepair';
 import { supplementPobWeaponSets } from './pobWeaponSets';
@@ -7,7 +8,7 @@ export default function PobWeaponSync({ active = true }: { active?: boolean }) {
   const saved = useSavedLoadout(), [message, setMessage] = useState('');
   const needed = !saved.state.weaponSets && !!saved.state.source?.fileName && !!saved.state.source?.savedAt;
   useEffect(() => {
-    if (!active || saved.error || !needed) return;
+    if (HOSTED_WORKBENCH || !active || saved.error || !needed) return;
     const task = new AbortController();
     void (async () => {
       try {

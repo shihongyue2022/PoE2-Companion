@@ -1,3 +1,4 @@
+import { publicAssetUrl } from './workbenchRuntime';
 import { useMemo, useState } from 'react';
 import type { PatchData } from '../../packages/engine/src/types';
 import type { GearTrade } from '../lib/gearTrade';
@@ -65,7 +66,7 @@ export default function SkillAffixGuidePanel({ state, inspection, data, trade, o
           <small className="lo-footnote">本部位 T1 roll：{location.row.targetRange!.min}–{location.row.targetRange!.max}；检索普通词缀，原传奇独有机制需另行核对。</small>
         </article>;
       })}{filtered.length > 8 && <button type="button" className="wb-text-button" onClick={() => setExpanded((old) => !old)}>{expanded ? '收起更多词缀' : `展开其余 ${filtered.length - 8} 条词缀`}</button>}</div>}
-      <details><summary>数据来源与适用边界</summary><p className="lo-footnote">技能、辅助与机制核对：{SKILL_GUIDE_CHECKED}。技能资料、版本变更和普通词池各自保留来源；词池版本不代表已自动更新到当前游戏。当前伤害快照仍属于原 PoB 保存的技能，点击其他技能不会借用那份 DPS。</p><div className="lo-actions"><a className="wb-link" href={SKILL_GUIDE_SOURCES.modifiers} target="_blank" rel="noreferrer">英文词缀资料 ↗</a><a className="wb-link" href={SKILL_GUIDE_SOURCES.official} target="_blank" rel="noreferrer">GGG 技能更新说明 ↗</a><a className="wb-link" href={SKILL_GUIDE_SOURCES.pob} target="_blank" rel="noreferrer">PoB2 技能数据 ↗</a><a className="wb-link" href="/images/skills/manifest.json" target="_blank" rel="noreferrer">GGG 图标来源 ↗</a></div><p className="lo-footnote">抗性仍是整套约束；这里只选增伤方向，不自动换装，不推算未配置的地面、盛怒、敌人抗性或覆盖率。</p></details>
+      <details><summary>数据来源与适用边界</summary><p className="lo-footnote">技能、辅助与机制核对：{SKILL_GUIDE_CHECKED}。技能资料、版本变更和普通词池各自保留来源；词池版本不代表已自动更新到当前游戏。当前伤害快照仍属于原 PoB 保存的技能，点击其他技能不会借用那份 DPS。</p><div className="lo-actions"><a className="wb-link" href={SKILL_GUIDE_SOURCES.modifiers} target="_blank" rel="noreferrer">英文词缀资料 ↗</a><a className="wb-link" href={SKILL_GUIDE_SOURCES.official} target="_blank" rel="noreferrer">GGG 技能更新说明 ↗</a><a className="wb-link" href={SKILL_GUIDE_SOURCES.pob} target="_blank" rel="noreferrer">PoB2 技能数据 ↗</a><a className="wb-link" href={publicAssetUrl("/images/skills/manifest.json")} target="_blank" rel="noreferrer">GGG 图标来源 ↗</a></div><p className="lo-footnote">抗性仍是整套约束；这里只选增伤方向，不自动换装，不推算未配置的地面、盛怒、敌人抗性或覆盖率。</p></details>
     </>}
   </section>;
 }

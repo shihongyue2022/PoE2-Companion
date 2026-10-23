@@ -39,6 +39,7 @@ import { CraftCheckpointPanel } from './CraftCheckpointPanel';
 import './workbench.css';
 import './streamlined.css';
 import Icon, { IconButton } from './WorkbenchIcon';
+import { HOSTED_WORKBENCH, WORKBENCH_SOURCE } from './workbenchRuntime';
 
 type Tab = 'plan' | 'simulate' | 'trade' | 'gear' | 'finance' | 'settings';
 interface Session {
@@ -485,6 +486,7 @@ export default function WorkbenchApp() {
       <header className="wb-header"><div><span className="wb-eyebrow">PATH OF EXILE 2 · PERSONAL WORKBENCH</span><h1>制作工坊 <span>CRAFT LAB</span></h1></div>
         <div className="wb-header-meta"><span className="wb-local"><i /> 本地计算</span><span className="wb-chip">国际服 · 简体界面</span><a href="https://www.pathofexile.com/trade2" target="_blank" rel="noreferrer">官方交易 <Icon name="external" size={14} /></a></div>
       </header>
+      {HOSTED_WORKBENCH && <div className="wb-alert"><div><strong>浏览器版 · 实际工坊</strong><p>可上传 PoB2 XML／分享代码、定义技能组、比较装备、生成官网检索并计算制作路线。自动读档、日志、快捷键、后台挂牌读取与成交同步请用本地版。记录保存在当前浏览器，不会同步到你的本地工坊。</p><a className="wb-link" href={WORKBENCH_SOURCE + '#启动'} target="_blank" rel="noreferrer">获取本地版 ↗</a></div></div>}
       <div className="wb-command-bar"><nav className="wb-tabs" aria-label="工作区域">{TABS.filter((entry) => entry.id !== 'simulate' && entry.id !== 'settings').map((entry) => <button key={entry.id} onClick={() => setTab(entry.id)} aria-current={tab === entry.id ? 'page' : undefined} className={tab === entry.id ? 'active' : ''}><Icon name={entry.icon} size={19} />{entry.label}</button>)}</nav>
         <div className="wb-command-actions"><button className="wb-button primary" onClick={() => { if (!pasteOpen) setPasteDraft(session.raw); setPasteOpen(!pasteOpen); }} aria-expanded={pasteOpen}><Icon name="paste" /> {pasteOpen ? '收起导入' : '粘贴游戏物品'}</button><IconButton icon="hammer" label="自由模拟" aria-pressed={tab === 'simulate'} onClick={() => setTab('simulate')} /><IconButton icon="sliders" label="数据与价格" aria-pressed={tab === 'settings'} onClick={() => setTab('settings')} /></div>
       </div>

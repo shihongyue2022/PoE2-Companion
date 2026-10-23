@@ -17,6 +17,7 @@ yarn.lock
 # Build outputs
 /build
 /dist
+/hosted-dist/
 out/
 bin/
 *.AppImage

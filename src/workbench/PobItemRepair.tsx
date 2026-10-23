@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { POB_REVIEW_MARKER, readOriginalLocalPob, repairPobEquipment } from './pobRepair';
 import type { LoadoutContext } from './loadoutIntegration';
 import { activeSecondWeapons } from './weaponSets';
+import { HOSTED_WORKBENCH } from './workbenchRuntime';
 
 export default function PobItemRepair({ raw, context, onRepair, auto = false }: { raw: string; context?: LoadoutContext; onRepair: (raw: string) => void; auto?: boolean }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const controller = useRef<AbortController | null>(null);
   const currentRecover = useRef<() => Promise<void>>(() => Promise.resolve());
   useEffect(() => { currentRecover.current = () => recover(); });
-  const canRecover = raw.includes(POB_REVIEW_MARKER) && !!context?.state.source?.fileName;
+  const canRecover = !HOSTED_WORKBENCH && raw.includes(POB_REVIEW_MARKER) && !!context?.state.source?.fileName;
   useEffect(() => {
     const timer = auto && canRecover ? window.setTimeout(() => { void currentRecover.current(); }, 100) : undefined;
     return () => window.clearTimeout(timer);
@@ -34,7 +35,7 @@ export default function PobItemRepair({ raw, context, onRepair, auto = false }: 
   return <section className="wb-inline-warning wb-pob-repair" aria-label="修复 PoB 装备识别">
     <strong>{count} 条词缀带有旧 PoB 待核对标记，未用于数值评分</strong>
     <p>这不代表全部词缀都无法识别。读取原文件重新核对，只更新这件装备的识别记录；若装备已变化，会停止并保留当前记录。</p>
-    <div className="wb-actions"><button type="button" className="wb-button" disabled={busy || !context?.state.source?.fileName} onClick={() => { void recover(); }}>{busy ? '正在核对原始 PoB2…' : '从本机 PoB2 重新识别此装备'}</button>
+    <div className="wb-actions"><button type="button" className="wb-button" disabled={HOSTED_WORKBENCH || busy || !context?.state.source?.fileName} onClick={() => { void recover(); }}>{busy ? '正在核对原始 PoB2…' : '从本机 PoB2 重新识别此装备'}</button>
       <label>或选择原 PoB2 XML<input aria-label="用于修复识别的 PoB2 XML" type="file" accept=".xml,text/xml,application/xml" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void recover(file); event.target.value = ''; }} /></label></div>
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
   </section>;

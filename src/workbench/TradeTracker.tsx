@@ -6,6 +6,7 @@ import OfficialCurrencyIcon from './OfficialCurrencyIcon';
 import TradeImportPanel from './TradeImportPanel';
 import { applyTradeImport } from './tradeImport';
 import OfficialHistoryPanel from './OfficialHistoryPanel';
+import { HOSTED_WORKBENCH } from './workbenchRuntime';
 
 const format = (n: number) => n.toLocaleString('zh-CN', { maximumFractionDigits: 4 });
 function Unit({ value }: { value: Currency }) { return <span className="tt-unit"><OfficialCurrencyIcon currencyId={value === 'exalted' ? 'exalt' : value} label={CURRENCIES[value]} />{CURRENCIES[value]}</span>; }
@@ -47,6 +48,7 @@ export default function TradeTracker({ state, league, save, onError, onManual, a
   const latest = useRef({ state, save });
   useEffect(() => { latest.current = { state, save }; }, [state, save]);
   const refresh = useCallback(async (history = false) => {
+    if (HOSTED_WORKBENCH) return;
     if (inflight.current) return;
     inflight.current = true; setBusy(true); setAttempted(true);
     try {
@@ -65,12 +67,12 @@ export default function TradeTracker({ state, league, save, onError, onManual, a
     finally { inflight.current = false; if (mounted.current) setBusy(false); }
   }, []);
   useEffect(() => {
-    if (!active || firstRead.current) return;
+    if (HOSTED_WORKBENCH || !active || firstRead.current) return;
     const timer = setTimeout(() => { firstRead.current = true; void refresh(true); }, 0);
     return () => clearTimeout(timer);
   }, [active, refresh]);
   useEffect(() => {
-    if (!state.tradeEnabled) return;
+    if (HOSTED_WORKBENCH || !state.tradeEnabled) return;
     const first = setTimeout(() => { void refresh(); }, 0);
     const timer = setInterval(() => { void refresh(); }, 10000);
     return () => { clearTimeout(first); clearInterval(timer); };
@@ -109,8 +111,8 @@ export default function TradeTracker({ state, league, save, onError, onManual, a
       <div className="tt-card"><span>已记录差额</span><strong className={report.expenseCount ? report.net >= 0 ? 'positive' : 'negative' : 'tt-unknown'}>{report.expenseCount ? format(report.net) : '待补支出'}</strong><Unit value={currency} /><small>{report.expenseCount ? '仅为已确认账目的收入减支出，不是完整利润' : '支出记录缺失，暂不将卖出收入当作利润'}</small></div>
     </div>
     <p className="tt-coverage wb-fine" role="status">{hasOfficial ? official?.purchases ? `官网本次返回 ${official.purchases} 笔显式买入，覆盖范围仍不完整。` : '官网同步未读取到买入，尚未覆盖游戏市集买入支出。' : '买入密语只作为报价线索，确认实际成交后才计入支出。'}收支按当前通货／时间／搜索条件统计；其他币种分别列在下方。</p>
-    <div className="tt-toolbar"><label className="tt-search"><Icon name="search" size={17} /><input aria-label="搜索交易记录" placeholder="搜索物品或玩家" value={search} onChange={(event) => setSearch(event.target.value)} /></label><label className="tt-enable"><input type="checkbox" checked={Boolean(state.tradeEnabled)} onChange={(event) => save({ ...state, tradeEnabled: event.target.checked })} />自动读取交易线索</label>
-      <IconButton icon="refresh" label="读取最近 30 天日志" disabled={busy} onClick={() => { void refresh(true); }} /><IconButton icon="paste" label="粘贴交易密语" aria-expanded={showPaste} onClick={() => setShowPaste(!showPaste)} /><IconButton icon="ledger" label="导入成交 CSV" aria-expanded={showImport} onClick={() => setShowImport(!showImport)} /><IconButton icon="plus" label="手动添加收支" onClick={onManual} /><IconButton icon="download" label="导出当前筛选交易 CSV" disabled={!report.rows.length} onClick={exportCsv} />
+    <div className="tt-toolbar"><label className="tt-search"><Icon name="search" size={17} /><input aria-label="搜索交易记录" placeholder="搜索物品或玩家" value={search} onChange={(event) => setSearch(event.target.value)} /></label><label className="tt-enable"><input type="checkbox" disabled={HOSTED_WORKBENCH} checked={!HOSTED_WORKBENCH && Boolean(state.tradeEnabled)} onChange={(event) => save({ ...state, tradeEnabled: event.target.checked })} />自动读取交易线索</label>
+      <IconButton icon="refresh" label="读取最近 30 天日志" disabled={HOSTED_WORKBENCH || busy} onClick={() => { void refresh(true); }} /><IconButton icon="paste" label="粘贴交易密语" aria-expanded={showPaste} onClick={() => setShowPaste(!showPaste)} /><IconButton icon="ledger" label="导入成交 CSV" aria-expanded={showImport} onClick={() => setShowImport(!showImport)} /><IconButton icon="plus" label="手动添加收支" onClick={onManual} /><IconButton icon="download" label="导出当前筛选交易 CSV" disabled={!report.rows.length} onClick={exportCsv} />
     </div>
     <p className="wb-fine tt-status" role="status">{busy ? '正在读取交易线索…' : status}{(state.tradeInbox?.length ?? 0) >= 500 ? ' · 待确认列表已满，请先处理现有线索，再读取新记录。' : ''}</p>
     {summary?.diagnostics && <details className="tt-diagnostics"><summary>日志读取明细 · {summary.diagnostics.whispers} 条密语中识别 {summary.events.length} 条交易线索</summary><p className="wb-fine">{summary.diagnostics.history ? '最近 30 天历史扫描' : '最近 1 MiB 增量窗口'} · 最后写入 {summary.modifiedAt ? new Date(summary.modifiedAt).toLocaleString('zh-CN') : '未知'} · {summary.diagnostics.unmatchedTradeMessages} 条疑似交易未匹配 · {summary.diagnostics.acceptanceHints} 条接受交易提示。这里只显示计数，不保存普通聊天。</p></details>}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { HOSTED_WORKBENCH } from './workbenchRuntime';
 import { decodePob, parsePobXml, previewPob, pobImportSource, type PobDocument } from './pobImport';
 import { LOADOUT_SLOTS, type LoadoutState } from './loadout';
 import LocalPobImport from './LocalPobImport';
@@ -28,7 +29,7 @@ export default function PobImportPanel({ onImport, current }: { onImport: (slots
   }
   return <section className="lo-pob-import" aria-label="更新 PoB2 角色快照">
     <LocalPobImport key={current?.source?.fileName ?? ''} disabled={busy} onRead={parse} currentFile={current?.source?.fileName} savedAt={current?.source?.savedAt} />
-    <details className="lo-backup"><summary><span>从 PoB2 导入整套装备</span> · 分享代码 / XML</summary>
+    <details className="lo-backup" open={HOSTED_WORKBENCH}><summary><span>从 PoB2 导入整套装备</span> · 分享代码 / XML</summary>
     <p className="lo-footnote">物品底座、已收录传奇名称与词缀以简体中文显示。PoB2 不提供稀有随机名称的中文对照，因此使用「稀有＋底座」作标题；英文原名保留在详情和原始文字中。</p>
     <h4>也可以粘贴分享代码或选择 XML</h4>
     <ol className="lo-import-steps">

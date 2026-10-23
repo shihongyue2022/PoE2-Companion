@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { HOSTED_WORKBENCH } from './workbenchRuntime';
 import type { FlexibleTradeDocument } from './tradeSearch';
 import { localizeEquipmentName, localizeEquipmentProperty, localizeEquipmentStat, parseEquipment } from './genericEquipment';
 import { TradeMemoryActions } from './TradeMemoryActions';
@@ -76,7 +77,7 @@ function PriceEstimateRequest({ query, url, league, auto = false, onEstimate, bu
   });
 
   useEffect(() => {
-    const timer = auto ? window.setTimeout(() => { void currentRequest.current(); }, 700) : undefined;
+    const timer = auto && !HOSTED_WORKBENCH ? window.setTimeout(() => { void currentRequest.current(); }, 700) : undefined;
     return () => window.clearTimeout(timer);
   }, [auto]);
 
@@ -95,10 +96,10 @@ function PriceEstimateRequest({ query, url, league, auto = false, onEstimate, bu
   return <section className="wb-price-estimate" aria-label="装备估价">
     <div className="wb-row wb-wrap">
       <h3>相似物品挂牌参考</h3>
-      <button type="button" className="wb-button" disabled={busy || remaining > 0}
+      {HOSTED_WORKBENCH ? <a className="wb-button" href={url} target="_blank" rel="noreferrer">到官网查看挂牌 ↗</a> : <button type="button" className="wb-button" disabled={busy || remaining > 0}
         onClick={() => { void currentRequest.current(); }}>
         {busy ? '正在查询官方挂单…' : remaining > 0 ? `${remaining} 秒后可重试` : buttonLabel ?? '获取挂牌估价'}
-      </button>
+      </button>}
     </div>
     <TradeMemoryActions {...memory} />
     {memoryError && <p className="wb-inline-warning" role="status">{memoryError}</p>}

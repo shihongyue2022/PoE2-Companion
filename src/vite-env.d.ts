@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_SENTRY_DSN?: string
+  readonly VITE_WORKBENCH_HOSTED?: string
   readonly MODE: string
 }
 

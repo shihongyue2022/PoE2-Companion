@@ -1,4 +1,5 @@
 import { parseEquipment, type Equipment } from './genericEquipment';
+import { requireLocalService } from './workbenchRuntime';
 import { parsePobXml, previewPob } from './pobImport';
 import type { LoadoutSlot, LoadoutState } from './loadout';
 import type { PobSource } from './loadoutSource';
@@ -59,6 +60,7 @@ export function applyPobItemRepair(state: LoadoutState, slot: LoadoutSlot, expec
 }
 
 export async function readOriginalLocalPob(source: PobSource, signal: AbortSignal, requireSameSnapshot = false): Promise<string> {
+  requireLocalService();
   if (!source.fileName) throw new Error('未记录原文件名，请选择原 PoB2 XML 文件进行核对。');
   const response = await fetch('/api/workbench/pob/builds', { signal });
   if (!response.ok) throw new Error('无法读取本机 PoB2，请保持工坊后台运行，或选择原 XML 文件。');

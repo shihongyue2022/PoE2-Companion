@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { HOSTED_WORKBENCH } from './workbenchRuntime';
 import { readOriginalLocalPob } from './pobRepair';
 import { needsPobResistanceRepair, supplementPobResistances } from './pobResistanceRepair';
 import { useSavedLoadout, writeSavedLoadout } from './loadoutStore';
@@ -9,7 +10,7 @@ export default function PobResistanceSync({ active = true }: { active?: boolean 
   const saved = useSavedLoadout();
   const [message, setMessage] = useState('');
   useEffect(() => {
-    if (!active || saved.error || !saved.state.source?.fileName || !needsPobResistanceRepair(saved.state)) return;
+    if (HOSTED_WORKBENCH || !active || saved.error || !saved.state.source?.fileName || !needsPobResistanceRepair(saved.state)) return;
     const task = new AbortController();
     void (async () => {
       try {

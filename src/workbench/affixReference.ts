@@ -2,6 +2,7 @@ import { matchEquipmentStat, type Equipment } from './genericEquipment';
 import type { EquipmentTradeRow } from './genericEquipmentTrade';
 import type { AffixReferenceResult } from '../../tools/affixReference';
 import { englishPoe2dbUrl } from './poe2dbReference';
+import { requireLocalService } from './workbenchRuntime';
 
 export type { AffixReferenceResult };
 const cache = new Map<string, { at: number; result: AffixReferenceResult }>();
@@ -13,6 +14,7 @@ export function cachedAffixReference(item: Equipment): AffixReferenceResult | un
   return entry && Date.now() - entry.at < 6 * 60 * 60_000 ? { ...entry.result, cached: true } : undefined;
 }
 export async function readAffixReference(item: Equipment, signal: AbortSignal): Promise<AffixReferenceResult> {
+  requireLocalService();
   const name = englishReferenceName(item);
   if (!name || /[\u3400-\u9fff]/u.test(name)) throw new Error('需先识别英文底座或传奇名称，暂不使用中文猜测检索。');
   const cached = cachedAffixReference(item); if (cached) return cached;

@@ -4,8 +4,12 @@ import { translatePobLabel } from './localization';
 import { BUILD_FAMILIES, isBuildMainSkill, profileForSkill, type BuildAnalysis, type BuildProfile } from './buildProfile';
 import { localizeEquipmentName, localizeEquipmentStat } from './genericEquipment';
 import PresetNumberInput, { budgetPresets } from './PresetNumberInput';
+import { HOSTED_WORKBENCH, LOCAL_SERVICE_MESSAGE } from './workbenchRuntime';
 
-export default function LocalGameDataPanel({ characterLevel, onBuild }: { characterLevel?: number; onBuild?: (profile: BuildProfile) => void }) {
+export default function LocalGameDataPanel(props: Parameters<typeof LocalGameDataClient>[0]) {
+  return HOSTED_WORKBENCH ? <p className="lo-footnote">{LOCAL_SERVICE_MESSAGE}</p> : <LocalGameDataClient {...props} />;
+}
+function LocalGameDataClient({ characterLevel, onBuild }: { characterLevel?: number; onBuild?: (profile: BuildProfile) => void }) {
   const [data, setData] = useState<LocalGameData | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const request = useRef<AbortController | null>(null);
   const [analysis, setAnalysis] = useState<BuildAnalysis | null>(null), [mainKey, setMainKey] = useState('');

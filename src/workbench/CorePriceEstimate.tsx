@@ -9,6 +9,7 @@ import { canonicalQuoteCurrency } from './loadoutQuotes';
 import { rememberTrade } from './tradeMemory';
 import Icon, { IconButton } from './WorkbenchIcon';
 import type { UpgradeMarketQuote } from './upgradeWorkflow';
+import { HOSTED_WORKBENCH } from './workbenchRuntime';
 
 export default function CorePriceEstimate({ options, auto, onEstimate, onRecordQuote, onCompare, reviewCandidate, initialSelection }: {
   options: EquipmentTradeOptions; auto?: boolean;
@@ -61,7 +62,7 @@ export default function CorePriceEstimate({ options, auto, onEstimate, onRecordQ
     finally { if (!task.signal.aborted) setBusy(false); }
   }
   useEffect(() => { latest.current = () => { void read(false); }; });
-  useEffect(() => { if (!auto) return; const timer = setTimeout(() => latest.current(), 700); return () => clearTimeout(timer); }, [auto]);
+  useEffect(() => { if (HOSTED_WORKBENCH || !auto) return; const timer = setTimeout(() => latest.current(), 700); return () => clearTimeout(timer); }, [auto]);
   function reset() { request.current?.abort(); setBusy(false); setResult(undefined); setMessage(''); }
   const data = result?.data.ok ? result.data : undefined;
   const samples = data?.listings?.map((listing) => {
@@ -86,7 +87,8 @@ export default function CorePriceEstimate({ options, auto, onEstimate, onRecordQ
       {band && <p className="wb-fine wb-core-conditions" aria-label="联合检索要求">{band.constraints.map(({ row, rangeLabel }) => `${row.label} ${rangeLabel}`).join('；')}</p>}
       <p className="wb-fine">全部条件同时满足；↓ 选择降序优先属性。</p>
       {!band && <p role="status" className="wb-inline-warning">{invalid}</p>}
-      <div className="wb-actions"><button type="button" className="wb-button" disabled={!overviewBand || loading || retry > 0} onClick={() => { void read(true); }}>核心属性降序</button><button type="button" className="wb-button primary" disabled={!band || loading || retry > 0} onClick={() => { void read(false); }}>{loading ? '正在读取…' : retry ? `${retry} 秒后可查询` : '检索提升候选'}</button>{band && <a className="wb-link" href={band.url} target="_blank" rel="noreferrer">官网核对联合条件 ↗</a>}{overviewBand && <a className="wb-link" href={overviewBand.url} target="_blank" rel="noreferrer">官网按核心属性降序 ↗</a>}</div>
+      <div className="wb-actions">{HOSTED_WORKBENCH ? <>{overviewBand && <a className="wb-button" href={overviewBand.url} target="_blank" rel="noreferrer">核心属性降序 ↗</a>}{band && <a className="wb-button primary" href={band.url} target="_blank" rel="noreferrer">官网检索提升候选 ↗</a>}</> : <><button type="button" className="wb-button" disabled={!overviewBand || loading || retry > 0} onClick={() => { void read(true); }}>核心属性降序</button><button type="button" className="wb-button primary" disabled={!band || loading || retry > 0} onClick={() => { void read(false); }}>{loading ? '正在读取…' : retry ? `${retry} 秒后可查询` : '检索提升候选'}</button>{band && <a className="wb-link" href={band.url} target="_blank" rel="noreferrer">官网核对联合条件 ↗</a>}{overviewBand && <a className="wb-link" href={overviewBand.url} target="_blank" rel="noreferrer">官网按核心属性降序 ↗</a>}</>}</div>
+      {HOSTED_WORKBENCH && <p className="wb-fine">联合条件在浏览器生成，点击后去官网读取挂牌；复制候选物品回角色页即可比较。本站不提供后台挂牌抓取。</p>}
       {message && requestKey === optionKey && <p role="alert" className="wb-inline-warning">{message}</p>}
       {data && result && <div aria-live="polite"><p>{result.band.constraints.length} 项核心属性同时满足{result.band.overview ? ' · 降序样本（不作为当前装备估价）' : ''} · 匹配 {data.total} 件 · 已取 {data.fetched} 件 · {new Date(data.sampledAt).toLocaleString('zh-CN')}</p>
         {!comparable.length && <p className="wb-inline-warning">没有能核对到同时满足所有要求的挂牌，请在官网核对；不会自动放宽任一门槛。</p>}
